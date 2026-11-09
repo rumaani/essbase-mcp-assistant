@@ -14,7 +14,7 @@ from pathlib import Path
 
 from cryptography.fernet import Fernet, InvalidToken
 
-from essbase_mcp.config import CHOICES, SECRET_FIELDS, Settings
+from essbase_mcp.config import CHOICES, INT_LIMITS, SECRET_FIELDS, Settings
 
 PREFIX = "enc:"
 
@@ -78,6 +78,15 @@ def validate(values: dict) -> list[str]:
         v = values.get(name)
         if v and not v.startswith(("https://", "http://")):
             errors.append(f"{name} must start with https:// (or http:// for local testing)")
+    for name, (lo, hi) in INT_LIMITS.items():
+        if values.get(name) not in (None, ""):
+            try:
+                v = int(values[name])
+            except (TypeError, ValueError):
+                errors.append(f"{name} must be a whole number")
+                continue
+            if not lo <= v <= hi:
+                errors.append(f"{name} must be between {lo} and {hi}")
     if values.get("active_cube") and "." not in values["active_cube"]:
         errors.append("active_cube must look like Application.Database")
     return errors
@@ -92,8 +101,15 @@ def merge(current: Settings, updates: dict) -> Settings:
                 values[name] = ""
             elif updates.get(name):
                 values[name] = updates[name]
-        elif name in updates and updates[name] is not None:
-            values[name] = bool(updates[name]) if name == "verify_tls" else str(updates[name]).strip()
+        elif name in updates and updates[name] not in (None, ""):
+            if name == "verify_tls":
+                values[name] = bool(updates[name])
+            elif name in INT_LIMITS:
+                values[name] = int(updates[name])
+            else:
+                values[name] = str(updates[name]).strip()
+        elif name == "verify_tls" and name in updates:
+            values[name] = bool(updates[name])
     return dataclasses.replace(current, **values)
 
 

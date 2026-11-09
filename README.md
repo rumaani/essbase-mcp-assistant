@@ -8,6 +8,9 @@ through Essbase's built-in **MCP server**. It does three things:
 3. **Calls the right MCP tool** with arguments validated against the tool's schema, and shows you exactly what it did.
 
 It runs fully without a live 26ai: a built-in mock server with two sample cubes is the default.
+It handles **multi-step questions** (member lookups in large outlines, top/bottom N) and is built
+for **many concurrent users** on one shared Essbase connection (tested with 100 at once).
+See [docs/CONCURRENCY.md](docs/CONCURRENCY.md).
 
 ```
 "revenue for coastal markets in plan"
@@ -45,6 +48,23 @@ emcp web                                             # open http://localhost:800
 
 See [docs/ADMIN.md](docs/ADMIN.md) for how settings and secrets are stored, and how to harden a shared deployment.
 
+## Multi-step questions
+| You ask | What happens |
+|---|---|
+| *Units for Store 117* (not in the cached outline) | find "Store 117" in Essbase → get the numbers. The match is remembered for everyone. |
+| *top 3 products by sales with profit* | rank products by Sales → get Sales and Profit for the top 3 |
+| *bottom 2 markets by profit by year* | rank markets by Profit → show the bottom 2 by quarter |
+| *Units for Store 999* | not found → asks you, rather than returning numbers for the wrong slice |
+
+## Many users at once
+All users share one sign-in, one MCP session and one connection pool. Token refresh and session
+recovery happen once, not per user. Parallel Essbase calls are capped, with a queue and a
+friendly "busy" message. Each browser picks its own cube, and context edits are conflict-checked.
+```bash
+python scripts/loadtest.py --users 100 --questions 5
+# 100 users x 5 questions = 500 requests ... answered correctly: 500/500, errors 0
+```
+
 ## Why this design
 - **No LLM gateway required.** Rules plus the context file handle common questions deterministically. An LLM can only *suggest* an intent; members and tools are always checked against the context file.
 - **Tool names aren't hard-coded.** Tools are discovered via `tools/list` and mapped to intents in the context file, so a different catalog means a rebuild, not a code change.
@@ -60,24 +80,26 @@ emcp context build --app ASOSamp --db Basic     # save metadata -> contexts/ASOS
 emcp ask "Units by geography" --dry-run         # show the plan only
 emcp ask "Units by geography"                   # plan + run
 emcp --remote tools                             # force the configured server for one command
-pytest                                          # 20 tests, all against the mock
+pytest                                          # 34 tests, all against the mock
+python scripts/loadtest.py --users 100           # against a running `emcp web`
 ```
 
 ## Layout
 ```
 src/essbase_mcp/
   config.py, settings_store.py   settings (defaults < .env < Admin tab), encrypted secrets
-  runtime.py                     mock vs. remote connection
+  runtime.py                     mock vs. remote connection (pool + call limits)
   auth/       token providers (client credentials, static token) + PKCE helpers
   mcp/        JSON-RPC 2.0 / Streamable HTTP client (JSON + SSE, session id, 401 retry)
-  context/    context builder, argument-name fitting, per-cube YAML store, validation
-  planner/    entity linker, intent rules, MDX builder, plan validation
+  context/    builder, argument fitting, per-cube store, shared cache with revisions
+  planner/    entity linker, intent rules, MDX builder, multi-step planner + executor
   llm/        optional OpenAI-compatible intent hint (gets glossary + notes)
   mock/       mock identity domain + Essbase MCP: Sample.Basic, ASOSamp.Basic
   web/        FastAPI backend-for-frontend + single-page UI (no Node build)
 contexts/     context files (one per cube)
 data/         saved settings + encryption key (git-ignored)
-docs/         ARCHITECTURE, CONTEXT_FILE, ADMIN, ROADMAP
+docs/         ARCHITECTURE, CONTEXT_FILE, CONCURRENCY, ADMIN, ROADMAP
+scripts/      loadtest.py
 ```
 
 ## Status

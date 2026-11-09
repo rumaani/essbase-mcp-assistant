@@ -4,6 +4,8 @@ See docs/CONTEXT_FILE.md for the format.
 """
 from __future__ import annotations
 
+import os
+import threading
 from pathlib import Path
 
 import yaml
@@ -17,9 +19,13 @@ def load(path: str | Path) -> dict:
 
 
 def save(ctx: dict, path: str | Path) -> None:
+    """Atomic write: readers (other threads/processes) see the old file or the new one, never
+    a half-written one."""
     p = Path(path)
     p.parent.mkdir(parents=True, exist_ok=True)
-    p.write_text(yaml.safe_dump(ctx, sort_keys=False, allow_unicode=True, width=100))
+    tmp = p.with_name(f".{p.name}.{os.getpid()}.{threading.get_ident()}.tmp")
+    tmp.write_text(yaml.safe_dump(ctx, sort_keys=False, allow_unicode=True, width=100))
+    os.replace(tmp, p)
 
 
 def path_for(context_dir: str, application: str, database: str) -> Path:
@@ -38,6 +44,7 @@ def list_saved(context_dir: str) -> list[dict]:
                     "application": cube.get("application"), "database": cube.get("database"),
                     "generated_at": ctx.get("generated_at"), "file": str(p),
                     "dimensions": len(ctx.get("dimensions", [])),
+                    "revision": ctx.get("revision", 1),
                     "glossary_terms": len(ctx.get("glossary") or {})})
     return out
 
@@ -47,6 +54,7 @@ def merge(generated: dict, existing: dict | None) -> dict:
     if not existing:
         return generated
     out = dict(generated)
+    out["revision"] = existing.get("revision", 1)
     for key in CURATED:
         if key == "intents":
             # curated mappings win when the tool still exists; new suggestions still appear

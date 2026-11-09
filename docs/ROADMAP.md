@@ -2,7 +2,9 @@
 
 - [ ] Verify against a live Essbase 26ai: real tool names/schemas, intent heuristics, response shapes
 - [ ] Authorization-code + PKCE sign-in (browser) for user-delegated access; token cache
-- [ ] Large-outline support: level/generation filters, member search tool, lazy loading
+- [ ] Large-outline support: level/generation filters when loading
+- [x] Multi-step plans: member lookup for partially loaded outlines, top/bottom N
+- [x] Concurrency: shared token/session with single-flight recovery, call limiter, per-request cube, revisioned contexts, load test
 - [ ] Richer MDX: time ranges ("Jan to Mar"), top-N, variance (Actual vs Budget), crossjoins
 - [ ] Evaluate `examples` as a regression suite (`emcp eval`)
 - [x] Web UI: ask / catalog / context / admin

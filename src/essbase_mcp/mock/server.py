@@ -9,7 +9,9 @@ Run:  python -m essbase_mcp.mock.server   (port 9100)
 """
 from __future__ import annotations
 
+import asyncio
 import json
+import os
 import re
 import secrets
 import time
@@ -66,7 +68,8 @@ ASO_OUTLINE = {
         ("Digital Cameras/Camcorders", "Personal Electronics", "Cameras")]},
     "Stores": {"type": "regular", "members": [
         ("Stores", None, "All Stores"), ("Mall", "Stores", None), ("Outlet", "Stores", None),
-        ("Online", "Stores", None)]},
+        ("Online", "Stores", None)] + [
+        (f"Store {i:03d}", ("Mall", "Outlet", "Online")[i % 3], None) for i in range(1, 121)]},
 }
 
 OUTLINES = {("Sample", "Basic"): OUTLINE, ("ASOSamp", "Basic"): ASO_OUTLINE}
@@ -98,6 +101,13 @@ TOOLS = [
                                     "database": {"type": "string"},
                                     "dimension": {"type": "string"},
                                     "parent": {"type": "string"}}}},
+    {"name": "search_members", "min_profile": "viewer",
+     "description": "Find members whose name or alias contains a search string.",
+     "inputSchema": {"type": "object", "required": ["application", "database", "pattern"],
+                     "properties": {"application": {"type": "string"},
+                                    "database": {"type": "string"},
+                                    "pattern": {"type": "string"},
+                                    "dimension": {"type": "string"}}}},
     {"name": "execute_mdx_query", "min_profile": "viewer",
      "description": "Execute an MDX query against a cube and return a grid of data values.",
      "inputSchema": {"type": "object", "required": ["application", "database", "query"],
@@ -114,6 +124,9 @@ TOOLS = [
 
 app = FastAPI(title="Mock Essbase MCP")
 _tokens: dict[str, float] = {}
+SESSIONS: set[str] = set()  # tests clear this to simulate the server dropping sessions
+STATS = {"tokens_issued": 0, "calls": 0}
+LATENCY_S = int(os.environ.get("EMCP_MOCK_LATENCY_MS", "0")) / 1000
 
 
 @app.post("/oauth2/v1/token")
@@ -125,6 +138,7 @@ def token(grant_type: str = Form(...), client_id: str = Form(...),
         raise HTTPException(401, "invalid_client")
     tok = secrets.token_urlsafe(24)
     _tokens[tok] = time.time() + 3600
+    STATS["tokens_issued"] += 1
     return {"access_token": tok, "token_type": "Bearer", "expires_in": 3600}
 
 
@@ -178,6 +192,12 @@ def _call(name: str, args: dict, profile: str) -> dict:
         parent = args.get("parent")
         rows = [m for m in dim if parent is None or m[1] == parent]
         return _text({"members": [{"name": n, "parent": p, "alias": a} for n, p, a in rows]})
+    if name == "search_members":
+        outline, pat = _outline(args), args["pattern"].lower()
+        hits = [{"name": n, "dimension": d, "parent": par, "alias": a}
+                for d, v in outline.items() if not args.get("dimension") or d == args["dimension"]
+                for n, par, a in v["members"] if pat in n.lower() or (a and pat in a.lower())]
+        return _text({"members": hits[:25], "total": len(hits)})
     if name == "execute_mdx_query":
         return _text(_run_mdx(args["query"], _outline(args)))
     return _text({"status": "submitted", "jobId": str(uuid.uuid4())})
@@ -190,11 +210,17 @@ async def mcp(request: Request, profile: str = "viewer",
     if _tokens.get(tok, 0) < time.time():
         return JSONResponse({"error": "invalid_token"}, status_code=401)
     msg = await request.json()
+    sid = request.headers.get("Mcp-Session-Id")
+    if msg.get("method") != "initialize" and sid and sid not in SESSIONS:
+        return JSONResponse({"error": "unknown session"}, status_code=404)
     if "id" not in msg:  # notification
         return Response(status_code=202)
     rid, method, params = msg["id"], msg["method"], msg.get("params", {})
+    STATS["calls"] += 1
     try:
         if method == "initialize":
+            sid = str(uuid.uuid4())
+            SESSIONS.add(sid)
             result = {"protocolVersion": params.get("protocolVersion"),
                       "capabilities": {"tools": {}},
                       "serverInfo": {"name": "mock-essbase-mcp", "version": "0.0.1"}}
@@ -203,13 +229,15 @@ async def mcp(request: Request, profile: str = "viewer",
             result = {"tools": [{k: v for k, v in t.items() if k != "min_profile"}
                                 for t in visible]}
         elif method == "tools/call":
+            if LATENCY_S:  # simulate a real server's response time (EMCP_MOCK_LATENCY_MS)
+                await asyncio.sleep(LATENCY_S)
             result = _call(params["name"], params.get("arguments", {}), profile)
         else:
             return JSONResponse({"jsonrpc": "2.0", "id": rid,
                                  "error": {"code": -32601, "message": "Method not found"}})
     except Exception as exc:  # noqa: BLE001 - surfaced as a tool error, like a real server would
         result = {"isError": True, "content": [{"type": "text", "text": str(exc)}]}
-    headers = {"Mcp-Session-Id": "mock-session"}
+    headers = {"Mcp-Session-Id": sid} if sid else {}
     return JSONResponse({"jsonrpc": "2.0", "id": rid, "result": result}, headers=headers)
 
 

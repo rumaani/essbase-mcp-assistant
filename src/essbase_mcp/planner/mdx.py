@@ -11,7 +11,8 @@ def q(member: str) -> str:
 
 
 def build_mdx(entities: list[Entity], group_by: list[str], index: MemberIndex,
-              cube: dict, defaults: dict) -> tuple[str, list[str]]:
+              cube: dict, defaults: dict,
+              group_parent: dict | None = None) -> tuple[str, list[str]]:
     warnings: list[str] = []
     by_dim: OrderedDict[str, list[str]] = OrderedDict()
     for e in entities:
@@ -28,7 +29,7 @@ def build_mdx(entities: list[Entity], group_by: list[str], index: MemberIndex,
         rows_dim = group_by[0]
         picked = by_dim.pop(rows_dim, None)
         rows = ("{" + ", ".join(q(m) for m in picked) + "}" if picked
-                else f"{q(index.top[rows_dim])}.Children")
+                else f"{q((group_parent or {}).get(rows_dim, index.top[rows_dim]))}.Children")
     else:
         multi = next((d for d, ms in by_dim.items() if len(ms) > 1), None)
         if multi:

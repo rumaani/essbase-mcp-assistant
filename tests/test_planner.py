@@ -42,3 +42,10 @@ def test_end_to_end(ctx, client):
     client.initialize()
     data = MCPClient.tool_payload(client.call_tool(p.tool, p.arguments))
     assert data["columns"] == ["Sales", "COGS"]
+
+
+def test_group_by_glossary_term_and_member(ctx):
+    ctx["glossary"]["quarter"] = "Year"
+    p = Planner(ctx)
+    assert "[Year].Children ON ROWS" in p.plan("Sales for East by quarter").arguments["query"]
+    assert "[East].Children ON ROWS" in p.plan("Sales by East").arguments["query"]

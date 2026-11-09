@@ -42,7 +42,7 @@ class Planner:
         self.llm = llm
 
     def plan(self, question: str) -> Plan:
-        entities, group_by = self.index.link(question)
+        entities, group_by, group_parent = self.index.link(question)
         intent, conf = classify(question, bool(entities or group_by))
 
         if self.llm and conf < 0.8:
@@ -81,7 +81,7 @@ class Planner:
                 canonical["parent"] = parent
         elif intent == "data_query":
             mdx, warns = build_mdx(entities, group_by, self.index, cube,
-                                   self.ctx.get("defaults") or {})
+                                   self.ctx.get("defaults") or {}, group_parent)
             canonical["query"] = mdx
             plan.warnings += warns
         elif intent == "calculation":

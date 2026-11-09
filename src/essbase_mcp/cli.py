@@ -4,6 +4,7 @@
   emcp ask "Sales for East by Year" --dry-run    # show the plan only
   emcp ask "Sales for East by Year"              # plan + call the tool
   emcp tools                                     # list tools from the server
+  emcp web --demo                                # browser UI against the built-in mock
 """
 from __future__ import annotations
 
@@ -58,6 +59,19 @@ def cmd_ask(a, s: Settings) -> int:
     return 1 if result.get("isError") else 0
 
 
+def cmd_web(a, s: Settings) -> int:
+    import uvicorn
+
+    from essbase_mcp.web.app import Session, create_app, demo_session
+
+    session = demo_session(s) if a.demo else Session(s)
+    session.connect()
+    print(f"Essbase MCP Assistant UI -> http://localhost:{a.port}"
+          + ("  (demo mode: in-process mock server)" if a.demo else ""))
+    uvicorn.run(create_app(session), host=a.host, port=a.port, log_level="warning")
+    return 0
+
+
 def main(argv: list[str] | None = None) -> None:
     p = argparse.ArgumentParser(prog="emcp")
     sub = p.add_subparsers(dest="cmd", required=True)
@@ -75,5 +89,10 @@ def main(argv: list[str] | None = None) -> None:
     q.add_argument("--dry-run", action="store_true")
     q.add_argument("--yes", action="store_true", help="confirm calculations")
     q.set_defaults(fn=cmd_ask)
+    w = sub.add_parser("web", help="start the browser UI")
+    w.add_argument("--demo", action="store_true", help="use the built-in mock server")
+    w.add_argument("--host", default="127.0.0.1")
+    w.add_argument("--port", type=int, default=8000)
+    w.set_defaults(fn=cmd_web)
     a = p.parse_args(argv)
     sys.exit(a.fn(a, Settings.from_env()))

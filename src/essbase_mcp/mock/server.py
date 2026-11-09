@@ -45,6 +45,39 @@ OUTLINE = {
         ("Variance", "Scenario", None)]},
 }
 
+# --- ASOSamp.Basic (abridged aggregate-storage sample) -----------------------
+ASO_OUTLINE = {
+    "Measures": {"type": "accounts", "members": [
+        ("Measures", None, None), ("Original Price", "Measures", None),
+        ("Price Paid", "Measures", "Net Revenue"), ("Units", "Measures", "Units Sold"),
+        ("Avg Sale Price", "Measures", None)]},
+    "Years": {"type": "regular", "members": [
+        ("Years", None, None), ("Curr Year", "Years", "Current Year"),
+        ("Prev Year", "Years", "Prior Year")]},
+    "Time": {"type": "time", "members": [
+        ("Time", None, None), ("MTD", "Time", None), ("Qtr1", "MTD", "Q1"),
+        ("Qtr2", "MTD", "Q2"), ("Qtr3", "MTD", "Q3"), ("Qtr4", "MTD", "Q4")]},
+    "Geography": {"type": "regular", "members": [
+        ("Geography", None, None), ("East", "Geography", "East Region"),
+        ("West", "Geography", "West Region"), ("Central", "Geography", "Central Region")]},
+    "Products": {"type": "regular", "members": [
+        ("Products", None, "All Merchandise"), ("Personal Electronics", "Products", None),
+        ("Home Entertainment", "Products", None), ("Computers and Peripherals", "Products", None),
+        ("Digital Cameras/Camcorders", "Personal Electronics", "Cameras")]},
+    "Stores": {"type": "regular", "members": [
+        ("Stores", None, "All Stores"), ("Mall", "Stores", None), ("Outlet", "Stores", None),
+        ("Online", "Stores", None)]},
+}
+
+OUTLINES = {("Sample", "Basic"): OUTLINE, ("ASOSamp", "Basic"): ASO_OUTLINE}
+
+
+def _outline(args: dict) -> dict:
+    key = (args.get("application"), args.get("database"))
+    if key not in OUTLINES:
+        raise ValueError(f"Cube {key[0]}.{key[1]} not found")
+    return OUTLINES[key]
+
 TOOLS = [
     {"name": "list_applications", "min_profile": "viewer",
      "description": "List Essbase applications the user can access.",
@@ -103,22 +136,23 @@ def _fake_value(*members: str) -> float:
     return float(sum(ord(c) for m in members for c in m) % 9000 + 1000)
 
 
-def _members(set_expr: str) -> list[str]:
+def _members(set_expr: str, outline: dict) -> list[str]:
     """Resolve '{[a], [b]}' or '[X].Children' against the mock outline."""
     set_expr = set_expr.strip()
     if set_expr.endswith(".Children"):
         parent = set_expr[: -len(".Children")].strip("[] ")
-        return [n for d in OUTLINE.values() for n, p, _ in d["members"] if p == parent]
+        return [n for d in outline.values() for n, p, _ in d["members"] if p == parent]
     return [m.strip(" []") for m in set_expr.strip("{} ").split(",") if m.strip(" []")]
 
 
-def _run_mdx(q: str) -> dict:
+def _run_mdx(q: str, outline: dict | None = None) -> dict:
+    outline = outline or OUTLINE
     m = re.search(r"SELECT\s+(.+?)\s+ON COLUMNS(?:,\s*(?:NON EMPTY\s+)?(.+?)\s+ON ROWS)?\s+FROM",
                   q, re.IGNORECASE | re.DOTALL)
     if not m:
         raise ValueError("MDX syntax error (mock parser)")
-    cols = _members(m.group(1))
-    rows = _members(m.group(2)) if m.group(2) else ["(slice)"]
+    cols = _members(m.group(1), outline)
+    rows = _members(m.group(2), outline) if m.group(2) else ["(slice)"]
     return {"query": q, "columns": cols,
             "rows": [{"member": r, "values": [_fake_value(r, c, q) for c in cols]} for r in rows]}
 
@@ -130,20 +164,22 @@ def _call(name: str, args: dict, profile: str) -> dict:
     if PROFILE_RANK[profile] < PROFILE_RANK[tool["min_profile"]]:
         raise PermissionError(f"Tool {name} requires profile {tool['min_profile']}")
     if name == "list_applications":
-        return _text({"applications": ["Sample"]})
+        return _text({"applications": sorted({a for a, _ in OUTLINES})})
     if name == "list_databases":
-        return _text({"databases": ["Basic"] if args["application"] == "Sample" else []})
+        return _text({"databases": sorted(d for a, d in OUTLINES if a == args["application"])})
     if name == "get_dimensions":
         return _text({"dimensions": [{"name": d, "type": v["type"], "memberCount": len(v["members"])}
-                                     for d, v in OUTLINE.items()]})
+                                     for d, v in _outline(args).items()]})
     if name == "get_members":
-        dim = OUTLINE[args["dimension"]]["members"]
+        outline = _outline(args)
+        if args["dimension"] not in outline:
+            raise ValueError(f"Dimension {args['dimension']} not found")
+        dim = outline[args["dimension"]]["members"]
         parent = args.get("parent")
         rows = [m for m in dim if parent is None or m[1] == parent]
         return _text({"members": [{"name": n, "parent": p, "alias": a} for n, p, a in rows]})
     if name == "execute_mdx_query":
-        q = args["query"]
-        return _text(_run_mdx(q))
+        return _text(_run_mdx(args["query"], _outline(args)))
     return _text({"status": "submitted", "jobId": str(uuid.uuid4())})
 
 

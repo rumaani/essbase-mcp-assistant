@@ -175,6 +175,9 @@ glossary:
   plan: Budget
   forecast: Budget
   quarter: Year
+  coastal:
+  - New York
+  - California
 defaults:
   Scenario: Actual
 examples:
@@ -182,3 +185,10 @@ examples:
   intent: data_query
 - question: Show the children of Colas
   intent: get_members
+notes: '- Sample.Basic is the classic Essbase demo cube (beverage company).
+
+  - ''Plan'' and ''forecast'' both mean the Budget scenario.
+
+  - Questions without a scenario are about Actual.
+
+  - Margin % = Margin / Sales.'

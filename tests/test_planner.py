@@ -49,3 +49,9 @@ def test_group_by_glossary_term_and_member(ctx):
     p = Planner(ctx)
     assert "[Year].Children ON ROWS" in p.plan("Sales for East by quarter").arguments["query"]
     assert "[East].Children ON ROWS" in p.plan("Sales by East").arguments["query"]
+
+
+def test_glossary_term_maps_to_several_members(ctx):
+    ctx["glossary"]["coastal"] = ["New York", "California"]
+    mdx = Planner(ctx).plan("Sales for coastal markets").arguments["query"]
+    assert "{[New York], [California]} ON ROWS" in mdx

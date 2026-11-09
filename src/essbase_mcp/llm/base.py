@@ -16,6 +16,8 @@ PROMPT = """You map questions about an Oracle Essbase cube to an intent.
 Intents: {intents}
 Dimensions: {dims}
 Glossary: {glossary}
+Notes from the cube owner (business rules; follow them):
+{notes}
 Reply with JSON only: {{"intent": "<one intent>", "group_by": ["<dimension>", ...]}}"""
 
 
@@ -26,7 +28,8 @@ class OpenAICompatible:
     def suggest(self, question: str, ctx: dict) -> dict | None:
         system = PROMPT.format(intents=list(ctx.get("intents", {})),
                                dims=[d["name"] for d in ctx.get("dimensions", [])],
-                               glossary=ctx.get("glossary", {}))
+                               glossary=ctx.get("glossary", {}),
+                               notes=(ctx.get("notes") or "(none)")[:4000])
         try:
             r = httpx.post(f"{self.base_url}/chat/completions", timeout=30,
                            headers={"Authorization": f"Bearer {self.api_key}"} if self.api_key else {},

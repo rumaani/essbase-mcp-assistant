@@ -1,18 +1,42 @@
 # Context file format (`contexts/<App>.<Db>.yaml`)
 
+One file per cube. Build or refresh it from **Catalog** (or `emcp context build`). Curate it from
+**Context**. A refresh replaces the generated sections and keeps the curated ones.
+
 | Section | Source | Purpose |
 |---|---|---|
 | `source`, `cube`, `generated_at` | generated | Where and when it was built |
 | `tools` | generated (`tools/list`) | Name, description, input schema |
-| `intents` | suggested + **curated** | intent → tool name. Edit if the heuristic picks wrong |
 | `dimensions` | generated | Dimension type, members, parents, aliases |
-| `glossary` | **curated** | Business terms → member names (`revenue: Sales`) |
-| `defaults` | **curated** | Implicit members per dimension (`Scenario: Actual`) |
-| `examples` | **curated** | Sample questions and expected intents (regression set / LLM few-shot) |
+| `intents` | suggested + **curated** | intent → tool name. Overrides survive a refresh while the tool still exists |
+| `glossary` | **curated** | Business term → member, or a list of members |
+| `defaults` | **curated** | Member used when a question doesn't name that dimension (`Scenario: Actual`) |
+| `notes` | **curated** | Free-form business rules and conventions |
+| `examples` | **curated** | Sample questions, shown as shortcuts on Ask (and a future regression set) |
+
+```yaml
+glossary:
+  revenue: Sales                     # 1 -> 1
+  coastal: [New York, California]    # 1 -> many: becomes a set on rows
+  quarter: Year                      # "by quarter" -> Year's children
+defaults:
+  Scenario: Actual
+notes: |
+  - 'Plan' and 'forecast' both mean Budget.
+  - Margin % = Margin / Sales.
+```
+
+## Structured mappings or free-form notes?
+Use both. They do different jobs.
+
+| | Glossary / defaults | Notes |
+|---|---|---|
+| Used by | Rules engine (always) and LLM | LLM (when configured) and people reading the context |
+| Behavior | Exact, the same every time, validated against the outline | Interpreted, so it can express rules and nuance |
+| Good for | Synonyms, nicknames, groupings, implicit members | Fiscal calendar, "use X unless Y", how to compute ratios, data caveats |
+| Risk | Can't express conditions | Unchecked; a model may misapply it |
+
+Rule of thumb: if it can be a mapping, make it a mapping. Put in notes what needs a sentence.
 
 Intents: `list_applications`, `list_databases`, `get_dimensions`, `get_members`,
 `data_query`, `calculation`.
-
-Tips:
-- Put a team's vocabulary in `glossary`: "opex", "plan", "LE", product nicknames.
-- Large outlines: limit members per dimension when building (roadmap) and rely on aliases + glossary.

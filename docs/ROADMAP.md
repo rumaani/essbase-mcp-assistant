@@ -5,6 +5,10 @@
 - [ ] Large-outline support: level/generation filters, member search tool, lazy loading
 - [ ] Richer MDX: time ranges ("Jan to Mar"), top-N, variance (Actual vs Budget), crossjoins
 - [ ] Evaluate `examples` as a regression suite (`emcp eval`)
-- [x] Simple web UI (ask / context / connection)
-- [ ] Entra ID SSO and console roles
+- [x] Web UI: ask / catalog / context / admin
+- [x] Multiple cubes: list applications from the server, one context file per cube
+- [x] Persistent, encrypted connection settings (Admin tab)
+- [x] Free-form notes + one-to-many glossary terms
+- [ ] Entra ID / OCI IAM SSO for the UI and per-user Essbase tokens
+- [ ] Use notes in the rules engine (e.g. fiscal calendar) without an LLM
 - [ ] Expose the assistant itself as an MCP server (so any MCP client can use it)

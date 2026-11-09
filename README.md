@@ -28,20 +28,20 @@ pip install -e ".[dev]"
 emcp web                                             # open http://localhost:8000
 ```
 
-| Tab | What it does |
-|---|---|
-| **Ask** | Question box with per-cube examples. Shows recognized members (and whether they matched by name, alias or glossary), intent, tool and MDX next to the result. CSV export. |
-| **Catalog** | Lists applications and cubes from the server. **Build** saves a cube's metadata to `contexts/<App>.<Db>.yaml`; **Use** makes it active. Switch cubes from the header too. |
-| **Context** | Curate the active cube: glossary (one term → one or more members), defaults, free-form notes, intent → tool overrides, example questions. Everything is validated against the outline. |
-| **Admin** | Connection settings that persist across restarts: mock vs. Essbase 26ai, endpoint, profile, OAuth client, TLS, optional LLM. **Test** before you **Save**. |
+| Page | For | What you do there |
+|---|---|---|
+| **Ask** | everyone | Type a question and get a table back. A one-line *Understood as…* shows how your words were read; **Show details** reveals the tool and MDX. |
+| **Cubes** | whoever sets it up | **Load** the cubes people can ask about (reads dimensions, members and aliases from Essbase). Switch cubes from the header. |
+| **Context** | cube owner | Five short steps: what's loaded, **vocabulary** (your words → members), **assumptions** (e.g. Actual unless stated), business rules, example questions. Tool mapping sits under *Advanced*. |
+| **Admin** | administrator | Built-in sample or Essbase 26ai, sign-in, access level, optional AI model. **Test** first, then **Save**; settings persist across restarts. |
 
-![Catalog tab](docs/img/catalog.png)
+![Cubes page](docs/img/catalog.png)
 
 ## Connecting to a real Essbase 26ai
 1. In your OCI IAM identity domain, create a **confidential application** with the client-credentials grant. Note the client ID and secret, and the token URL `https://<domain>.identity.oraclecloud.com/oauth2/v1/token`.
 2. Open **Admin**, choose **Essbase 26ai**, and enter the MCP endpoint `https://<host>/essbase/rest/v1/ess-mcp`, the profile, and the OAuth details.
 3. Click **Test connection**, then **Save settings**.
-4. Open **Catalog** and **Build** the cubes you need. Then check **Context → Intent → tool**: discovery guesses from tool names and descriptions, so confirm it picked the right tools.
+4. Open **Cubes** and **Load** the cubes you need. Then check **Context → Advanced: how questions reach Essbase**: tools are matched by name and description, so confirm the right tool is picked for each kind of question.
 
 See [docs/ADMIN.md](docs/ADMIN.md) for how settings and secrets are stored, and how to harden a shared deployment.
 
@@ -51,7 +51,7 @@ See [docs/ADMIN.md](docs/ADMIN.md) for how settings and secrets are stored, and 
 - **Structured and free-form context.** The glossary and defaults are exact and validated. Notes capture business rules a mapping can't express (see [docs/CONTEXT_FILE.md](docs/CONTEXT_FILE.md)).
 - **Server-side secrets.** The browser never sees client secrets or tokens. Saved secrets are encrypted, and state-changing calls need a CSRF header.
 
-![Context tab](docs/img/context.png)
+![Context page](docs/img/context.png)
 
 ## Command line
 ```bash

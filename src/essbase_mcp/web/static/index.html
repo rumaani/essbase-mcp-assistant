@@ -6,319 +6,311 @@
 <title>Essbase MCP Assistant</title>
 <style>
   :root {
-    --bg: #f6f7f9; --panel: #ffffff; --ink: #1d2433; --muted: #5d6779; --line: #e3e6ec;
-    --accent: #2f5bd3; --accent-soft: #e8eefc; --ok: #1f8a4c; --ok-soft: #e6f4ec;
-    --warn: #a56300; --warn-soft: #fdf3e2; --bad: #b42318; --bad-soft: #fdecea;
+    --bg: #f6f7f9; --panel: #fff; --ink: #1d2433; --muted: #626c7e; --line: #e4e7ec;
+    --accent: #2f5bd3; --accent-soft: #eef2fd; --ok: #1f7a46; --ok-soft: #e7f5ec;
+    --warn: #9a5b00; --warn-soft: #fdf4e3; --bad: #b42318; --bad-soft: #fdecea;
     --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    --w: 920px;
   }
   * { box-sizing: border-box; }
-  body { margin: 0; font: 14px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  body { margin: 0; font: 14px/1.55 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
          background: var(--bg); color: var(--ink); }
-  header { display: flex; align-items: center; gap: 14px; padding: 10px 24px; flex-wrap: wrap;
-           background: var(--panel); border-bottom: 1px solid var(--line); position: sticky; top: 0; z-index: 5; }
-  header h1 { font-size: 16px; margin: 0; font-weight: 650; }
-  header select { font: inherit; padding: 5px 8px; border: 1px solid var(--line); border-radius: 6px; background: var(--bg); }
-  nav { display: flex; gap: 4px; margin-left: 12px; }
-  nav button { border: 0; background: none; padding: 8px 14px; border-radius: 6px; cursor: pointer;
-               font: inherit; color: var(--muted); }
+  button, input, select, textarea { font: inherit; color: inherit; }
+
+  /* ---------- header ---------- */
+  header { background: var(--panel); border-bottom: 1px solid var(--line); position: sticky; top: 0; z-index: 10; }
+  .bar { max-width: var(--w); margin: 0 auto; padding: 10px 20px; display: flex; align-items: center; gap: 16px; }
+  .brand { font-weight: 650; font-size: 15px; white-space: nowrap; }
+  nav { display: flex; gap: 2px; }
+  nav button { border: 0; background: none; padding: 7px 12px; border-radius: 6px; cursor: pointer; color: var(--muted); }
+  nav button:hover { color: var(--ink); }
   nav button.active { background: var(--accent-soft); color: var(--accent); font-weight: 600; }
   .spacer { flex: 1; }
-  .pill { display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px; border-radius: 999px;
-          font-size: 12px; background: var(--line); color: var(--muted); white-space: nowrap; }
-  .pill.ok { background: var(--ok-soft); color: var(--ok); }
-  .pill.bad { background: var(--bad-soft); color: var(--bad); }
-  .pill.warn { background: var(--warn-soft); color: var(--warn); }
-  .dot { width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
-  main { max-width: 1180px; margin: 0 auto; padding: 24px; }
+  .status { display: flex; align-items: center; gap: 8px; font-size: 12.5px; color: var(--muted); white-space: nowrap; }
+  .status select { padding: 4px 8px; border: 1px solid var(--line); border-radius: 6px; background: var(--bg); font-size: 13px; }
+  .dot { flex: none; width: 8px; height: 8px; border-radius: 50%; background: var(--muted); display: inline-block; }
+  .dot.ok { background: #22a35a; } .dot.bad { background: var(--bad); }
+
+  /* ---------- page ---------- */
+  main { max-width: var(--w); margin: 0 auto; padding: 28px 20px 96px; }
   .tab { display: none; } .tab.active { display: block; }
-  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 18px 20px;
-          margin-bottom: 16px; }
-  .card h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted);
-             margin: 0 0 12px; font-weight: 600; }
-  .card h2 small { text-transform: none; letter-spacing: 0; font-weight: 400; margin-left: 6px; }
-  .ask { display: flex; gap: 8px; }
-  .ask input { flex: 1; font: inherit; font-size: 15px; padding: 11px 14px; border: 1px solid var(--line);
-               border-radius: 8px; outline: none; }
+  .page-title { font-size: 20px; font-weight: 650; margin: 0 0 4px; }
+  .page-sub { color: var(--muted); margin: 0 0 22px; }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 20px 22px; margin-bottom: 16px; }
+  .step { display: flex; gap: 14px; align-items: flex-start; margin-bottom: 14px; }
+  .stepnum { flex: none; width: 26px; height: 26px; border-radius: 50%; background: var(--accent-soft); color: var(--accent);
+         font-weight: 700; font-size: 13px; display: grid; place-items: center; margin-top: 1px; }
+  .step h3 { margin: 0; font-size: 15.5px; }
+  .step p { margin: 2px 0 0; color: var(--muted); font-size: 13px; }
+  .muted { color: var(--muted); } .small { font-size: 12.5px; }
+  code { font-family: var(--mono); font-size: 12.5px; background: var(--bg); padding: 1px 5px; border-radius: 4px; }
+  pre { font-family: var(--mono); font-size: 12.5px; background: #101828; color: #dbe4ff; padding: 12px 14px;
+        border-radius: 8px; margin: 0; white-space: pre-wrap; word-break: break-word; }
+
+  /* ---------- controls ---------- */
+  .btn { border-radius: 8px; padding: 8px 16px; cursor: pointer; border: 1px solid var(--accent); background: var(--panel);
+         color: var(--accent); font-weight: 500; white-space: nowrap; }
+  .btn.primary { background: var(--accent); color: #fff; font-weight: 600; }
+  .btn.sm { padding: 4px 11px; font-size: 13px; }
+  .btn.ghost { border-color: var(--line); color: var(--ink); }
+  .btn:disabled { opacity: .5; cursor: default; }
+  .x { background: none; border: 0; color: var(--muted); cursor: pointer; font-size: 16px; padding: 2px 6px; border-radius: 4px; }
+  .x:hover { color: var(--bad); background: var(--bad-soft); }
+  input[type=text], input[type=password], input:not([type]), select, textarea {
+    padding: 8px 10px; border: 1px solid var(--line); border-radius: 7px; background: #fff; width: 100%; }
   input:focus, select:focus, textarea:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
-  button.primary, button.secondary { font: inherit; border-radius: 8px; padding: 8px 16px; cursor: pointer;
-               border: 1px solid var(--accent); }
-  button.primary { background: var(--accent); color: #fff; font-weight: 600; }
-  button.secondary { background: var(--panel); color: var(--accent); }
-  button.small { padding: 4px 10px; font-size: 13px; }
-  button:disabled { opacity: .55; cursor: default; }
-  .opts { display: flex; align-items: center; gap: 16px; margin-top: 10px; color: var(--muted); font-size: 13px; }
-  .chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 12px; }
-  .chip { border: 1px solid var(--line); background: var(--bg); border-radius: 999px; padding: 4px 12px;
-          cursor: pointer; font: inherit; font-size: 13px; color: var(--ink); }
-  .chip:hover { border-color: var(--accent); color: var(--accent); }
-  .grid2 { display: grid; grid-template-columns: 400px 1fr; gap: 16px; align-items: start; }
-  @media (max-width: 920px) { .grid2 { grid-template-columns: 1fr; } }
-  dl { display: grid; grid-template-columns: 120px 1fr; gap: 8px 12px; margin: 0; }
-  dt { color: var(--muted); } dd { margin: 0; min-width: 0; word-break: break-word; }
-  .ent { display: inline-block; margin: 0 6px 6px 0; padding: 3px 8px; border-radius: 6px;
-         background: var(--accent-soft); font-size: 13px; }
-  .ent small { color: var(--muted); }
-  code, pre { font-family: var(--mono); font-size: 12.5px; }
-  pre { background: #0f1729; color: #dbe4ff; padding: 12px 14px; border-radius: 8px; margin: 0;
-        white-space: pre-wrap; word-break: break-word; }
-  .note { padding: 10px 12px; border-radius: 8px; margin-top: 12px; font-size: 13px; }
-  .note.warn { background: var(--warn-soft); color: var(--warn); }
-  .note.bad { background: var(--bad-soft); color: var(--bad); }
-  .note.info { background: var(--accent-soft); color: var(--accent); }
-  .note.ok { background: var(--ok-soft); color: var(--ok); }
+  textarea { min-height: 120px; resize: vertical; line-height: 1.55; }
+  .row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+
+  .msg { padding: 10px 12px; border-radius: 8px; font-size: 13px; margin-top: 12px; }
+  .msg.info { background: var(--accent-soft); color: var(--accent); }
+  .msg.ok { background: var(--ok-soft); color: var(--ok); }
+  .msg.warn { background: var(--warn-soft); color: var(--warn); }
+  .msg.bad { background: var(--bad-soft); color: var(--bad); }
+  .tag { display: inline-block; font-size: 11.5px; padding: 1px 8px; border-radius: 999px; background: var(--bg);
+         color: var(--muted); border: 1px solid var(--line); white-space: nowrap; }
+  .tag.ok { background: var(--ok-soft); color: var(--ok); border-color: transparent; }
+  .tag.blue { background: var(--accent); color: #fff; border-color: transparent; }
+
   table { border-collapse: collapse; width: 100%; }
-  th, td { padding: 8px 10px; border-bottom: 1px solid var(--line); text-align: left; vertical-align: middle; }
-  th { font-size: 12px; color: var(--muted); font-weight: 600; background: var(--bg); }
+  th, td { padding: 9px 10px; border-bottom: 1px solid var(--line); text-align: left; vertical-align: middle; }
+  th { font-size: 12px; color: var(--muted); font-weight: 600; }
   td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
-  .empty { color: var(--muted); text-align: center; padding: 36px 0; }
-  .history { list-style: none; padding: 0; margin: 0; }
-  .history li { padding: 6px 0; border-bottom: 1px solid var(--line); cursor: pointer; font-size: 13px;
-                display: flex; justify-content: space-between; gap: 8px; }
-  .history li:hover { color: var(--accent); }
-  .row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
-  .field input, .field select, .row input, td input, td select, textarea {
-    font: inherit; padding: 7px 10px; border: 1px solid var(--line); border-radius: 6px; background: #fff; }
-  td input, td select { width: 100%; padding: 5px 8px; }
-  textarea { width: 100%; min-height: 150px; resize: vertical; font-size: 13px; line-height: 1.5; }
-  details { border-bottom: 1px solid var(--line); padding: 8px 0; }
-  summary { cursor: pointer; font-weight: 600; }
-  summary span { font-weight: 400; color: var(--muted); margin-left: 6px; }
-  .members { columns: 3; column-gap: 24px; margin: 8px 0 4px 16px; font-size: 13px; }
-  .members div { break-inside: avoid; padding: 1px 0; }
+  tr:last-child td { border-bottom: 0; }
+  .edit td { padding: 6px 6px; }
+  .empty { color: var(--muted); text-align: center; padding: 34px 10px; }
+
+  /* ---------- ask ---------- */
+  .askbox { display: flex; gap: 10px; }
+  .askbox input { font-size: 16px; padding: 13px 16px; border-radius: 10px; }
+  .askbox .btn { padding: 0 22px; border-radius: 10px; }
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 12px; align-items: center; }
+  .chip { border: 1px solid var(--line); background: var(--panel); border-radius: 999px; padding: 4px 12px; cursor: pointer; font-size: 13px; }
+  .chip:hover { border-color: var(--accent); color: var(--accent); }
+  .answer-head { display: flex; align-items: baseline; gap: 12px; margin-bottom: 12px; }
+  .answer-head h2 { margin: 0; font-size: 16px; font-weight: 600; }
+  .understood { margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--line); font-size: 13px; color: var(--muted); }
+  .understood b { color: var(--ink); font-weight: 600; }
+  .understood .pair { white-space: nowrap; }
+  details.more summary { cursor: pointer; color: var(--accent); font-size: 13px; margin-top: 10px; list-style: none; }
+  details.more summary::-webkit-details-marker { display: none; }
+  details.more summary::before { content: "▸ "; } details.more[open] summary::before { content: "▾ "; }
+  dl { display: grid; grid-template-columns: 110px 1fr; gap: 6px 12px; margin: 12px 0; font-size: 13px; }
+  dt { color: var(--muted); } dd { margin: 0; }
+  .vbar { display: inline-block; height: 6px; border-radius: 3px; background: var(--accent); opacity: .22; margin-left: 10px; vertical-align: middle; }
+
+  /* ---------- context ---------- */
+  .stats { display: flex; gap: 28px; flex-wrap: wrap; margin: 4px 0 0 40px; }
+  .stat b { display: block; font-size: 20px; } .stat span { color: var(--muted); font-size: 12.5px; }
+  .indent { margin-left: 40px; }
+  .defaults { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 12px 18px; }
+  .defaults label { font-size: 12.5px; color: var(--muted); display: block; margin-bottom: 3px; }
+  details.adv > summary { cursor: pointer; font-weight: 600; padding: 4px 0; }
+  .outline details { border-bottom: 1px solid var(--line); padding: 7px 0; }
+  .outline summary { cursor: pointer; }
+  .outline summary span { color: var(--muted); font-size: 12.5px; margin-left: 6px; }
+  .members { columns: 3; column-gap: 20px; margin: 6px 0 2px 18px; font-size: 13px; }
   .members small { color: var(--muted); }
-  .link { background: none; border: 0; color: var(--bad); cursor: pointer; font: inherit; }
-  .muted { color: var(--muted); }
-  .bar { display: inline-block; height: 8px; border-radius: 4px; background: var(--accent); opacity: .25;
-         vertical-align: middle; margin-left: 8px; }
-  .form { display: grid; grid-template-columns: 180px 1fr; gap: 12px 16px; align-items: center; }
-  .form label.k { color: var(--muted); }
-  .form .field input:not([type=checkbox]):not([type=radio]), .form .field select { width: 100%; max-width: 560px; }
-  .form .hint { grid-column: 2; margin-top: -8px; font-size: 12px; color: var(--muted); }
-  fieldset { border: 0; padding: 0; margin: 0; }
-  .section { grid-column: 1 / -1; font-size: 12px; font-weight: 600; color: var(--muted); text-transform: uppercase;
-             letter-spacing: .04em; border-top: 1px solid var(--line); padding-top: 14px; margin-top: 4px; }
-  .section:first-child { border-top: 0; padding-top: 0; margin-top: 0; }
-  .remote-only.hidden { display: none; }
-  .modes { display: flex; gap: 10px; flex-wrap: wrap; }
-  .mode { border: 1px solid var(--line); border-radius: 8px; padding: 10px 14px; cursor: pointer; flex: 1; min-width: 200px;
-          display: flex; gap: 8px; align-items: flex-start; }
+  .savebar { position: fixed; left: 0; right: 0; bottom: 0; background: var(--panel); border-top: 1px solid var(--line);
+             box-shadow: 0 -4px 16px rgba(16,24,40,.06); transform: translateY(110%); transition: transform .18s, visibility .18s; z-index: 9; visibility: hidden; }
+  .savebar.show { transform: none; visibility: visible; }
+  .savebar .bar { justify-content: flex-end; }
+
+  /* ---------- admin ---------- */
+  .form { display: grid; grid-template-columns: 170px 1fr; gap: 12px 16px; align-items: center; margin-left: 40px; }
+  .form > label { color: var(--muted); font-size: 13px; }
+  .form .hint { grid-column: 2; margin-top: -6px; font-size: 12px; color: var(--muted); }
+  .modes { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-left: 40px; }
+  .mode { border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; cursor: pointer; display: flex; gap: 10px; }
   .mode:has(input:checked) { border-color: var(--accent); background: var(--accent-soft); }
-  .mode b { display: block; } .mode span { font-size: 12px; color: var(--muted); }
-  .mode input { margin: 3px 0 0; }
-  .actions { display: flex; gap: 8px; align-items: center; margin-top: 18px; flex-wrap: wrap; }
-  .badge { font-size: 11px; padding: 1px 7px; border-radius: 999px; background: var(--ok-soft); color: var(--ok); }
-  .badge.active { background: var(--accent); color: #fff; }
+  .mode b { display: block; } .mode span { font-size: 12.5px; color: var(--muted); }
+  .mode input { margin-top: 4px; }
+  .hide { display: none !important; }
+  @media (max-width: 720px) {
+    .form, .modes { grid-template-columns: 1fr; margin-left: 0; } .form .hint { grid-column: 1; }
+    .stats, .indent { margin-left: 0; } .members { columns: 2; } .bar { flex-wrap: wrap; }
+  }
 </style>
 </head>
 <body>
 <header>
-  <h1>Essbase MCP Assistant</h1>
-  <select id="cubeSelect" title="Active cube"></select>
-  <nav>
-    <button data-tab="ask" class="active">Ask</button>
-    <button data-tab="catalog">Catalog</button>
-    <button data-tab="context">Context</button>
-    <button data-tab="admin">Admin</button>
-  </nav>
-  <div class="spacer"></div>
-  <span id="modePill" class="pill"></span>
-  <span id="connPill" class="pill"><span class="dot"></span><span>Checking…</span></span>
+  <div class="bar">
+    <span class="brand">Essbase MCP Assistant</span>
+    <nav>
+      <button data-tab="ask" class="active">Ask</button>
+      <button data-tab="cubes">Cubes</button>
+      <button data-tab="context">Context</button>
+      <button data-tab="admin">Admin</button>
+    </nav>
+    <div class="spacer"></div>
+    <div class="status">
+      <select id="cubeSelect" title="Cube you are asking about"></select>
+      <span id="connDot" class="dot"></span><span id="connText">Checking…</span>
+    </div>
+  </div>
 </header>
 
 <main>
-  <!-- ================= ASK ================= -->
+  <!-- ======================= ASK ======================= -->
   <section id="tab-ask" class="tab active">
     <div class="card">
-      <form class="ask" id="askForm">
-        <input id="q" autocomplete="off" placeholder="Ask about the cube, e.g. “revenue for Colas by market in Qtr1”">
-        <button class="primary" id="askBtn">Ask</button>
+      <form class="askbox" id="askForm">
+        <input id="q" autocomplete="off" placeholder="Ask a question, e.g. “revenue for Colas by market in Qtr1”">
+        <button class="btn primary" id="askBtn">Ask</button>
       </form>
-      <div class="opts">
-        <label><input type="checkbox" id="planOnly"> Plan only (don’t call Essbase)</label>
-      </div>
       <div class="chips" id="examples"></div>
     </div>
-    <div class="grid2">
-      <div>
-        <div class="card">
-          <h2>How it was understood</h2>
-          <div id="plan"><div class="empty">Ask a question to see the plan.</div></div>
-        </div>
-        <div class="card">
-          <h2>Recent</h2>
-          <ul class="history" id="history"><li class="muted">Nothing yet.</li></ul>
-        </div>
-      </div>
-      <div class="card">
-        <h2>Result</h2>
-        <div id="result"><div class="empty">Results appear here.</div></div>
-      </div>
-    </div>
+    <div id="answer"></div>
+    <div id="recentWrap" class="chips" hidden><span class="muted small">Recent:</span><span id="recent" class="chips" style="margin:0"></span></div>
   </section>
 
-  <!-- ================= CATALOG ================= -->
-  <section id="tab-catalog" class="tab">
+  <!-- ======================= CUBES ======================= -->
+  <section id="tab-cubes" class="tab">
+    <h1 class="page-title">Cubes</h1>
+    <p class="page-sub">Pick the cubes people can ask about. Loading a cube reads its dimensions, members and aliases from Essbase.</p>
     <div class="card">
-      <h2>Applications and cubes on the server</h2>
-      <div class="row">
-        <button class="secondary" id="refreshCatalog">Refresh list</button>
-        <button class="primary" id="buildAll">Build all missing</button>
-        <span class="muted" id="catalogMsg"></span>
+      <div class="row" style="margin-bottom:6px">
+        <span class="muted small" id="catalogMsg"></span><div class="spacer"></div>
+        <button class="btn ghost sm" id="refreshCatalog">Refresh list</button>
+        <button class="btn sm" id="buildAll">Load all</button>
       </div>
-      <div class="note info">Building a cube reads its outline (dimensions, members, aliases) and the server’s tool
-        catalog into <code>contexts/&lt;App&gt;.&lt;Db&gt;.yaml</code>. Refreshing keeps your glossary, defaults,
-        notes and intent overrides.</div>
-      <div id="catalog" style="margin-top:14px"><div class="empty">Loading…</div></div>
+      <div id="catalog"><div class="empty">Loading…</div></div>
     </div>
   </section>
 
-  <!-- ================= CONTEXT ================= -->
+  <!-- ======================= CONTEXT ======================= -->
   <section id="tab-context" class="tab">
-    <div id="noContext" class="card" hidden>
-      <div class="empty">No context for this cube yet. Open <b>Catalog</b> and click <b>Build</b>.</div>
-    </div>
+    <h1 class="page-title">Context for <span id="ctxCube"></span></h1>
+    <p class="page-sub">Teach the assistant how your team talks about this cube. Most teams only need steps 2 and 3.</p>
+    <div id="noContext" class="card" hidden><div class="empty">This cube isn’t loaded yet. Open <b>Cubes</b> and click <b>Load</b>.</div></div>
+
     <div id="contextBody">
       <div class="card">
-        <div class="row">
-          <h2 style="margin:0">Context · <span id="ctxCube"></span></h2>
-          <div class="spacer"></div>
-          <span class="muted" id="builtAt"></span>
-          <button class="secondary small" id="rebuild">Refresh from server</button>
-          <button class="primary" id="saveContext">Save changes</button>
-        </div>
-        <div id="ctxMsg"></div>
+        <div class="step"><div class="stepnum">1</div><div style="flex:1"><h3>What’s loaded</h3>
+          <p>Read from Essbase. Refresh after outline changes; your edits below are kept.</p></div>
+          <button class="btn ghost sm" id="rebuild">Refresh from Essbase</button></div>
+        <div class="stats" id="stats"></div>
+        <details class="more indent"><summary>Browse the outline</summary><div class="outline" id="dims"></div></details>
       </div>
-      <div class="grid2">
-        <div>
-          <div class="card">
-            <h2>Glossary <small>business term → one or more members</small></h2>
-            <table><thead><tr><th style="width:36%">Term</th><th>Member(s)</th><th></th></tr></thead>
-              <tbody id="glossary"></tbody></table>
-            <div class="row" style="margin-top:10px">
-              <button class="secondary small" id="addTerm" type="button">+ Add term</button>
-              <span class="muted" style="font-size:12px">Separate several members with commas.</span>
-            </div>
-          </div>
-          <div class="card">
-            <h2>Defaults <small>member used when a question doesn’t say</small></h2>
-            <table><thead><tr><th>Dimension</th><th>Default member</th></tr></thead><tbody id="defaults"></tbody></table>
-          </div>
-          <div class="card">
-            <h2>Intent → tool <small>override if discovery guessed wrong</small></h2>
-            <table><tbody id="intents"></tbody></table>
-          </div>
+
+      <div class="card">
+        <div class="step"><div class="stepnum">2</div><div><h3>Vocabulary</h3>
+          <p>Words people use, and the Essbase member(s) they mean. Use commas for a group, e.g. <i>coastal → New York, California</i>.</p></div></div>
+        <div class="indent">
+          <table class="edit"><thead><tr><th style="width:38%">When someone says…</th><th>…they mean member(s)</th><th style="width:36px"></th></tr></thead>
+            <tbody id="glossary"></tbody></table>
+          <button class="btn ghost sm" id="addTerm" type="button" style="margin-top:8px">+ Add a word</button>
         </div>
-        <div>
-          <div class="card">
-            <h2>Notes <small>free-form business rules and conventions</small></h2>
-            <textarea id="notes" placeholder="e.g.&#10;- Fiscal year starts in February; Qtr1 = Feb–Apr.&#10;- 'Plan' means Budget unless the question says forecast.&#10;- Actuals are closed through last month; current month is preliminary.&#10;- Margin % should be computed as Margin / Sales."></textarea>
-            <div class="note info" style="margin-top:8px">Notes are given to the LLM (when one is configured in Admin)
-              and kept with the cube for other users to read. The rules engine uses the glossary and defaults.</div>
-          </div>
-          <div class="card">
-            <h2>Example questions <small>one per line · shown as shortcuts on Ask</small></h2>
-            <textarea id="examplesText" style="min-height:110px"></textarea>
-          </div>
-          <div class="card">
-            <h2>Dimensions</h2>
-            <div id="dims"></div>
-          </div>
-          <div class="card">
-            <h2>Tools discovered</h2>
-            <table><thead><tr><th>Tool</th><th>Description</th></tr></thead><tbody id="tools"></tbody></table>
-          </div>
-        </div>
+      </div>
+
+      <div class="card">
+        <div class="step"><div class="stepnum">3</div><div><h3>Assumptions</h3>
+          <p>What to use when a question doesn’t say. For example, assume <i>Actual</i> unless someone asks about plan.</p></div></div>
+        <div class="defaults indent" id="defaults"></div>
+      </div>
+
+      <div class="card">
+        <div class="step"><div class="stepnum">4</div><div><h3>Business rules <span class="tag">optional</span></h3>
+          <p>Anything else worth knowing, in plain sentences. Used when an AI model is turned on in Admin, and helpful to other users either way.</p></div></div>
+        <div class="indent"><textarea id="notes" placeholder="- Fiscal year starts in February.&#10;- 'Plan' means Budget unless the question says forecast.&#10;- Margin % = Margin / Sales."></textarea></div>
+      </div>
+
+      <div class="card">
+        <div class="step"><div class="stepnum">5</div><div><h3>Example questions <span class="tag">optional</span></h3>
+          <p>One per line. They appear as one-click shortcuts on the Ask page.</p></div></div>
+        <div class="indent"><textarea id="examplesText" style="min-height:90px"></textarea></div>
+      </div>
+
+      <div class="card">
+        <details class="adv"><summary>Advanced: how questions reach Essbase</summary>
+          <p class="muted small" style="margin:6px 0 12px">Each kind of question is answered by one Essbase MCP tool. These are matched automatically when the cube
+            is loaded; change one only if it picked the wrong tool.</p>
+          <table class="edit"><thead><tr><th>Kind of question</th><th>Essbase tool</th></tr></thead><tbody id="intents"></tbody></table>
+          <h3 style="font-size:14px;margin:22px 0 6px">All tools on the server</h3>
+          <table><tbody id="tools"></tbody></table>
+        </details>
       </div>
     </div>
   </section>
 
-  <!-- ================= ADMIN ================= -->
+  <!-- ======================= ADMIN ======================= -->
   <section id="tab-admin" class="tab">
-    <div class="grid2" style="grid-template-columns: 1fr 360px">
+    <h1 class="page-title">Admin</h1>
+    <p class="page-sub">Where the assistant connects and how it signs in. Saved settings are kept when the app restarts.</p>
+    <div class="card" id="connCard"></div>
+    <form id="adminForm" autocomplete="off">
       <div class="card">
-        <h2>Connection settings</h2>
-        <form id="adminForm" autocomplete="off">
-          <div class="form">
-            <div class="section">Server</div>
-            <label class="k">Mode</label>
-            <div class="modes">
-              <label class="mode"><input type="radio" name="mode" value="mock"><div><b>Built-in mock</b>
-                <span>Sample.Basic and ASOSamp.Basic, no Essbase needed</span></div></label>
-              <label class="mode"><input type="radio" name="mode" value="remote"><div><b>Essbase 26ai</b>
-                <span>Your server’s MCP endpoint and identity domain</span></div></label>
-            </div>
-
-            <label class="k remote-only" for="mcp_url">MCP endpoint</label>
-            <div class="field remote-only"><input id="mcp_url" name="mcp_url" placeholder="https://<host>/essbase/rest/v1/ess-mcp"></div>
-            <label class="k" for="profile">Essbase MCP profile</label>
-            <div class="field"><select id="profile" name="profile">
-              <option value="viewer">viewer (read only)</option><option value="analyst">analyst</option>
-              <option value="admin">admin</option></select></div>
-            <div class="hint">The server only lists tools allowed for this profile.</div>
-            <label class="k remote-only">TLS</label>
-            <div class="field remote-only"><label><input type="checkbox" name="verify_tls"> Verify server certificate</label></div>
-
-            <div class="section remote-only">Authentication (OCI IAM identity domain)</div>
-            <label class="k remote-only" for="auth_mode">Method</label>
-            <div class="field remote-only"><select id="auth_mode" name="auth_mode">
-              <option value="client_credentials">OAuth client credentials</option>
-              <option value="token">Bearer token (testing)</option>
-              <option value="none">None</option></select></div>
-            <label class="k remote-only cc" for="token_url">Token URL</label>
-            <div class="field remote-only cc"><input id="token_url" name="token_url" placeholder="https://idcs-xxxx.identity.oraclecloud.com/oauth2/v1/token"></div>
-            <label class="k remote-only cc" for="client_id">Client ID</label>
-            <div class="field remote-only cc"><input id="client_id" name="client_id"></div>
-            <label class="k remote-only cc" for="client_secret">Client secret</label>
-            <div class="field remote-only cc"><input id="client_secret" name="client_secret" type="password" autocomplete="new-password">
-              <label class="muted" style="font-size:12px;margin-left:8px" id="clearSecretWrap"><input type="checkbox" name="clear_client_secret"> clear saved</label></div>
-            <label class="k remote-only cc" for="scope">Scope</label>
-            <div class="field remote-only cc"><input id="scope" name="scope"></div>
-            <label class="k remote-only tok" for="access_token">Access token</label>
-            <div class="field remote-only tok"><input id="access_token" name="access_token" type="password" autocomplete="new-password"></div>
-
-            <div class="section">Query understanding</div>
-            <label class="k" for="llm_provider">Assistant</label>
-            <div class="field"><select id="llm_provider" name="llm_provider">
-              <option value="none">Rules + context only (no LLM)</option>
-              <option value="openai_compatible">OpenAI-compatible LLM (OpenAI, Ollama, LM Studio…)</option></select></div>
-            <label class="k llm" for="llm_base_url">LLM base URL</label>
-            <div class="field llm"><input id="llm_base_url" name="llm_base_url" placeholder="http://localhost:11434/v1"></div>
-            <label class="k llm" for="llm_model">Model</label>
-            <div class="field llm"><input id="llm_model" name="llm_model" placeholder="llama3.1"></div>
-            <label class="k llm" for="llm_api_key">API key</label>
-            <div class="field llm"><input id="llm_api_key" name="llm_api_key" type="password" autocomplete="new-password"></div>
-          </div>
-          <div class="actions">
-            <button type="button" class="secondary" id="testSettings">Test connection</button>
-            <button type="submit" class="primary" id="saveSettings">Save settings</button>
-            <span id="adminMsg"></span>
-          </div>
-        </form>
-      </div>
-      <div>
-        <div class="card">
-          <h2>Current connection</h2>
-          <dl id="connInfo"></dl>
+        <div class="step"><div class="stepnum">1</div><div><h3>Server</h3><p>Try everything with the built-in sample, or connect to your Essbase 26ai.</p></div></div>
+        <div class="modes">
+          <label class="mode"><input type="radio" name="mode" value="mock"><div><b>Built-in sample</b>
+            <span>Sample.Basic and ASOSamp.Basic. Nothing to set up.</span></div></label>
+          <label class="mode"><input type="radio" name="mode" value="remote"><div><b>Essbase 26ai</b>
+            <span>Your server’s MCP endpoint and OCI identity domain.</span></div></label>
         </div>
-        <div class="card">
-          <h2>How settings are stored</h2>
-          <div class="muted" style="font-size:13px">
-            Saved to <code>data/settings.json</code> on the server and used on every restart. Secrets are encrypted
-            with a key in <code>data/secret.key</code> (or <code>EMCP_SECRET_KEY</code>) and never sent back to the
-            browser. Leave a secret blank to keep the saved one. Set <code>EMCP_ADMIN_PASSWORD</code> to protect this tab.
-          </div>
+        <div class="form remote" style="margin-top:16px">
+          <label for="mcp_url">MCP endpoint</label><input id="mcp_url" name="mcp_url" placeholder="https://<host>/essbase/rest/v1/ess-mcp">
+          <label></label><label class="small" style="color:var(--ink)"><input type="checkbox" name="verify_tls"> Verify the server’s certificate</label>
+        </div>
+        <div class="form" style="margin-top:12px">
+          <label for="profile">Access level</label>
+          <select id="profile" name="profile"><option value="viewer">Viewer: read only</option>
+            <option value="analyst">Analyst</option><option value="admin">Admin: includes calculations</option></select>
+          <div class="hint">Essbase only offers the tools this level allows.</div>
         </div>
       </div>
-    </div>
+
+      <div class="card remote">
+        <div class="step"><div class="stepnum">2</div><div><h3>Sign-in</h3><p>An OAuth client from your OCI IAM identity domain (confidential app, client credentials).</p></div></div>
+        <div class="form">
+          <label for="auth_mode">Method</label>
+          <select id="auth_mode" name="auth_mode"><option value="client_credentials">OAuth client credentials</option>
+            <option value="token">Paste a bearer token (testing)</option><option value="none">None</option></select>
+          <label class="cc" for="token_url">Token URL</label><input class="cc" id="token_url" name="token_url" placeholder="https://idcs-xxxx.identity.oraclecloud.com/oauth2/v1/token">
+          <label class="cc" for="client_id">Client ID</label><input class="cc" id="client_id" name="client_id">
+          <label class="cc" for="client_secret">Client secret</label>
+          <div class="cc row" style="flex-wrap:nowrap"><input id="client_secret" name="client_secret" type="password" autocomplete="new-password">
+            <label class="small muted" id="clearSecretWrap" style="white-space:nowrap"><input type="checkbox" name="clear_client_secret"> clear</label></div>
+          <label class="cc" for="scope">Scope</label><input class="cc" id="scope" name="scope">
+          <label class="tok" for="access_token">Access token</label><input class="tok" id="access_token" name="access_token" type="password" autocomplete="new-password">
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="step"><div class="stepnum" id="aiNum">3</div><div><h3>AI model <span class="tag">optional</span></h3>
+          <p>Without one, questions are understood with rules and your context. Any OpenAI-compatible model works (OpenAI, Ollama, LM Studio).</p></div></div>
+        <div class="form">
+          <label for="llm_provider">Use</label>
+          <select id="llm_provider" name="llm_provider"><option value="none">No AI model</option><option value="openai_compatible">OpenAI-compatible model</option></select>
+          <label class="llm" for="llm_base_url">Base URL</label><input class="llm" id="llm_base_url" name="llm_base_url" placeholder="http://localhost:11434/v1">
+          <label class="llm" for="llm_model">Model</label><input class="llm" id="llm_model" name="llm_model" placeholder="llama3.1">
+          <label class="llm" for="llm_api_key">API key</label><input class="llm" id="llm_api_key" name="llm_api_key" type="password" autocomplete="new-password">
+        </div>
+      </div>
+      <p class="muted small">Secrets are encrypted on the server and never shown again. Leave a secret blank to keep the saved one.
+        Details in <code>docs/ADMIN.md</code>.</p>
+    </form>
   </section>
 </main>
 
+<div class="savebar" id="savebar"><div class="bar">
+  <span class="muted small" id="saveMsg">You have unsaved changes.</span>
+  <button class="btn ghost" id="testBtn" hidden>Test connection</button>
+  <button class="btn ghost" id="discardBtn">Discard</button>
+  <button class="btn primary" id="saveBtn">Save</button>
+</div></div>
+
 <script>
 const $ = (id) => document.getElementById(id);
-const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) =>
-  ({"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"}[c]));
-const INTENTS = ["list_applications", "list_databases", "get_dimensions", "get_members", "data_query", "calculation"];
-let ctx = null, status = null, hist = [], adminPassword = "";
+const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"}[c]));
+const INTENTS = {
+  data_query: "Answer number questions (e.g. Sales by market)",
+  get_members: "List members (e.g. children of East)",
+  get_dimensions: "Describe the cube’s dimensions",
+  list_applications: "List applications",
+  list_databases: "List cubes in an application",
+  calculation: "Run a calculation (admin only)",
+};
+let ctx = null, status = null, recent = [], adminPassword = "", currentTab = "ask", dirty = false;
 
 async function api(path, opts = {}, retry = true) {
   const headers = {"Content-Type": "application/json", "X-Requested-With": "essbase-mcp-assistant"};
@@ -327,182 +319,172 @@ async function api(path, opts = {}, retry = true) {
   if (res.status === 401 && path.startsWith("/api/admin/") && retry) {
     const pw = prompt("Admin password");
     if (pw === null) throw new Error("Admin password required");
-    adminPassword = pw;
-    return api(path, opts, false);
+    adminPassword = pw; return api(path, opts, false);
   }
   const body = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(body.detail || res.statusText);
   return body;
 }
-const note = (kind, text) => `<div class="note ${kind}">${esc(text)}</div>`;
+const msg = (kind, text) => `<div class="msg ${kind}">${esc(text)}</div>`;
 
+// ---------------- navigation + save bar ----------------
 function showTab(name) {
+  if (dirty && name !== currentTab && !confirm("Discard unsaved changes?")) return;
+  setDirty(false);
+  currentTab = name;
   document.querySelectorAll("nav button").forEach((x) => x.classList.toggle("active", x.dataset.tab === name));
   document.querySelectorAll(".tab").forEach((t) => t.classList.toggle("active", t.id === "tab-" + name));
-  if (name === "catalog") loadCatalog();
+  $("testBtn").hidden = name !== "admin";
+  if (name === "cubes") loadCatalog();
   if (name === "admin") loadAdmin();
+  if (name === "context") renderContext();
+  window.scrollTo(0, 0);
 }
 document.querySelectorAll("nav button").forEach((b) => b.onclick = () => showTab(b.dataset.tab));
+function setDirty(v, text = "You have unsaved changes.") {
+  dirty = v; $("savebar").classList.toggle("show", v); $("saveMsg").innerHTML = esc(text);
+}
+$("tab-context").addEventListener("input", () => setDirty(true));
+$("tab-context").addEventListener("change", () => setDirty(true));
+$("adminForm").addEventListener("input", () => setDirty(true));
+$("adminForm").addEventListener("change", () => { syncAdmin(); setDirty(true); });
+$("discardBtn").onclick = () => { setDirty(false); currentTab === "admin" ? loadAdmin() : renderContext(); };
+$("saveBtn").onclick = () => currentTab === "admin" ? saveAdmin() : saveContext();
+$("testBtn").onclick = testAdmin;
 
-// ================= status + cube switcher =================
+// ---------------- status + cube switcher ----------------
 async function loadStatus() {
   status = await api("/api/status");
-  const mp = $("modePill");
-  mp.className = "pill " + (status.mode === "mock" ? "warn" : "");
-  mp.textContent = status.mode === "mock" ? "Built-in mock" : "Essbase 26ai";
-  const pill = $("connPill");
-  pill.className = "pill " + (status.connected ? "ok" : "bad");
-  pill.lastChild.textContent = status.connected ? `Connected · ${status.profile}` : "Not connected";
-  const rows = [
-    ["Mode", status.mode === "mock" ? "Built-in mock server" : "Remote Essbase 26ai"],
-    ["Endpoint", `<code>${esc(status.mcp_url)}</code>`],
-    ["Profile", esc(status.profile)],
-    ["Auth", esc(status.auth_mode) + (status.client_id ? ` · <code>${esc(status.client_id)}</code>` : "")],
-    ["Token", status.token_expires_in ? `valid, ${Math.round(status.token_expires_in / 60)} min left` : "not issued"],
-    ["Server", status.server ? `${esc(status.server.name)} ${esc(status.server.version || "")}` : "—"],
-    ["Assistant", status.llm_provider === "none" ? "rules + context" : esc(status.llm_provider)],
-  ];
-  if (status.error) rows.push(["Last error", `<span style="color:var(--bad)">${esc(status.error)}</span>`]);
-  $("connInfo").innerHTML = rows.map(([k, v]) => `<dt>${k}</dt><dd>${v}</dd>`).join("");
-  return status;
+  $("connDot").className = "dot " + (status.connected ? "ok" : "bad");
+  $("connText").textContent = (status.mode === "mock" ? "Sample server" : "Essbase 26ai") + (status.connected ? "" : " · offline");
+  renderConnCard();
 }
-
 async function loadCubes() {
   const r = await api("/api/contexts");
   const opts = r.contexts.map((c) => c.cube);
   if (!opts.includes(r.active_cube)) opts.unshift(r.active_cube);
   $("cubeSelect").innerHTML = opts.map((c) => `<option ${c === r.active_cube ? "selected" : ""}>${esc(c)}</option>`).join("");
 }
-$("cubeSelect").onchange = async (e) => {
-  try { ctx = await api("/api/context/activate", {method: "POST", body: JSON.stringify({cube: e.target.value})}); }
-  catch (err) { ctx = null; alert(err.message); }
-  await loadStatus(); await loadCubes(); renderContext(); resetAsk();
+async function activateCube(cube) {
+  try { ctx = await api("/api/context/activate", {method: "POST", body: JSON.stringify({cube})}); }
+  catch (e) { ctx = null; }
+  await loadStatus(); await loadCubes(); resetAsk(); if (currentTab === "context") renderContext();
+}
+$("cubeSelect").onchange = (e) => {
+  if (dirty && !confirm("Discard unsaved changes?")) { e.target.value = status.active_cube; return; }
+  setDirty(false); activateCube(e.target.value);
 };
 
-// ================= ask =================
+// ---------------- ask ----------------
 const DEFAULT_EXAMPLES = {
   "Sample.Basic": ["revenue and cost of sales for Colas by market in Qtr1", "Sales and Profit for New York by quarter",
                    "Profit by product in Budget", "show the children of East"],
   "ASOSamp.Basic": ["Units by geography", "Price Paid by store for Curr Year", "show the children of Personal Electronics"],
 };
-function renderExamples() {
-  const fromCtx = (ctx?.examples || []).map((e) => e.question || e);
-  const list = [...new Set([...fromCtx, ...(DEFAULT_EXAMPLES[status?.active_cube] || []),
-                            "what dimensions are in this cube?"])].slice(0, 8);
-  $("examples").innerHTML = list.map((q) => `<button class="chip" type="button">${esc(q)}</button>`).join("");
-  $("examples").querySelectorAll(".chip").forEach((b) => b.onclick = () => { $("q").value = b.textContent; ask(); });
-}
 function resetAsk() {
-  $("plan").innerHTML = ctx ? `<div class="empty">Ask a question to see the plan.</div>`
-    : note("info", "No context for this cube yet. Open Catalog and click Build.");
-  $("result").innerHTML = `<div class="empty">Results appear here.</div>`;
-  renderExamples();
+  const list = [...new Set([...(ctx?.examples || []).map((e) => e.question || e), ...(DEFAULT_EXAMPLES[status?.active_cube] || [])])].slice(0, 6);
+  $("examples").innerHTML = list.length ? `<span class="muted small">Try:</span>` + list.map((q) => `<button class="chip" type="button">${esc(q)}</button>`).join("") : "";
+  $("examples").querySelectorAll(".chip").forEach((b) => b.onclick = () => { $("q").value = b.textContent; ask(); });
+  $("q").placeholder = `Ask about ${status?.active_cube || "your cube"}…`;
+  $("answer").innerHTML = ctx ? "" : `<div class="card">${msg("info", `${status?.active_cube || "This cube"} isn’t loaded yet. Open Cubes and click Load.`)}</div>`;
 }
 $("askForm").onsubmit = (e) => { e.preventDefault(); ask(); };
 
 async function ask() {
   const question = $("q").value.trim();
   if (!question) return;
-  $("askBtn").disabled = true; $("askBtn").textContent = "Asking…";
+  $("askBtn").disabled = true; $("askBtn").textContent = "…";
   try {
-    const r = await api("/api/ask", {method: "POST", body: JSON.stringify({question, execute: !$("planOnly").checked})});
-    renderPlan(r); renderResult(r);
-    hist = [{question, ok: r.ok, cube: r.cube}, ...hist.filter((h) => h.question !== question)].slice(0, 8);
-    $("history").innerHTML = hist.map((h) => `<li><span>${esc(h.question)} <small class="muted">· ${esc(h.cube)}</small></span>
-      <span class="pill ${h.ok ? "ok" : "warn"}">${h.ok ? "ok" : "?"}</span></li>`).join("");
-    $("history").querySelectorAll("li").forEach((li, i) => li.onclick = () => { $("q").value = hist[i].question; ask(); });
-  } catch (e) {
-    $("plan").innerHTML = note("bad", e.message);
-    $("result").innerHTML = `<div class="empty">—</div>`;
-  }
+    const r = await api("/api/ask", {method: "POST", body: JSON.stringify({question, execute: true})});
+    $("answer").innerHTML = renderAnswer(question, r);
+    const csv = $("csvBtn"); if (csv) csv.onclick = () => downloadCsv(r.result);
+    recent = [question, ...recent.filter((q) => q !== question)].slice(0, 5);
+    $("recentWrap").hidden = false;
+    $("recent").innerHTML = recent.map((q) => `<button class="chip" type="button">${esc(q)}</button>`).join("");
+    $("recent").querySelectorAll(".chip").forEach((b) => b.onclick = () => { $("q").value = b.textContent; ask(); });
+  } catch (e) { $("answer").innerHTML = `<div class="card">${msg("bad", e.message)}</div>`; }
   $("askBtn").disabled = false; $("askBtn").textContent = "Ask";
 }
 
-function renderPlan(r) {
+function renderAnswer(question, r) {
   const p = r.plan;
-  let html = `<dl>
-    <dt>Intent</dt><dd><span class="pill ${p.intent === "unknown" ? "bad" : "ok"}">${esc(p.intent)}</span>
-      <span class="muted">${Math.round(p.confidence * 100)}% confidence</span></dd>
-    <dt>Recognized</dt><dd>${p.entities.length ? p.entities.map((e) =>
-      `<span class="ent">${esc(e.text)} <small>→ ${esc(e.dimension)}:</small><b>${esc(e.member)}</b> <small>(${esc(e.via)})</small></span>`
-    ).join("") : '<span class="muted">nothing</span>'}</dd>
-    <dt>Tool</dt><dd>${p.tool ? `<code>${esc(p.tool)}</code>` : '<span class="muted">—</span>'}</dd>
-    <dt>Time</dt><dd class="muted">${r.elapsed_ms} ms</dd></dl>`;
-  if (p.arguments?.query) html += `<div style="margin-top:12px"><pre>${esc(formatMdx(p.arguments.query))}</pre></div>`;
-  else if (p.tool) html += `<div style="margin-top:12px"><pre>${esc(JSON.stringify(p.arguments, null, 2))}</pre></div>`;
-  p.warnings.forEach((w) => html += note("warn", w));
-  if (p.clarification) html += note("warn", p.clarification);
-  $("plan").innerHTML = html;
-}
-const formatMdx = (q) => q.replace(/^SELECT /, "SELECT\n  ").replace(/ ON COLUMNS, /, " ON COLUMNS,\n  ")
-  .replace(/ FROM /, "\nFROM ").replace(/ WHERE /, "\nWHERE ");
-
-function renderResult(r) {
-  const el = $("result"), d = r.result;
-  if (r.error) { el.innerHTML = note("bad", r.error); return; }
-  if (!r.ok) { el.innerHTML = `<div class="empty">Refine the question. See the note on the left.</div>`; return; }
-  if (d == null) { el.innerHTML = `<div class="empty">Plan only. Untick “Plan only” to run it.</div>`; return; }
-  if (d.columns && d.rows) {
+  let body = "";
+  if (p.clarification) body += msg("warn", p.clarification);
+  if (r.error) body += msg("bad", r.error);
+  p.warnings.forEach((w) => body += msg("warn", w));
+  const d = r.result;
+  let hasCsv = false;
+  if (d && d.columns && d.rows) {
+    hasCsv = true;
     const max = Math.max(...d.rows.flatMap((x) => x.values).map(Math.abs), 1);
-    el.innerHTML = `<table><thead><tr><th></th>${d.columns.map((c) => `<th class="num">${esc(c)}</th>`).join("")}</tr></thead>
-      <tbody>${d.rows.map((row) => `<tr><td>${esc(row.member)}</td>${row.values.map((v) =>
-        `<td class="num">${v.toLocaleString(undefined, {maximumFractionDigits: 2})}<span class="bar" style="width:${Math.round(Math.abs(v) / max * 60)}px"></span></td>`
-      ).join("")}</tr>`).join("")}</tbody></table>
-      <div class="row" style="margin-top:12px"><button class="secondary small" type="button" id="csvBtn">Download CSV</button></div>`;
-    $("csvBtn").onclick = () => downloadCsv(d);
-    return;
+    body += `<table><thead><tr><th></th>${d.columns.map((c) => `<th class="num">${esc(c)}</th>`).join("")}</tr></thead><tbody>${
+      d.rows.map((row) => `<tr><td>${esc(row.member)}</td>${row.values.map((v) =>
+        `<td class="num">${v.toLocaleString(undefined, {maximumFractionDigits: 2})}<span class="vbar" style="width:${Math.round(Math.abs(v) / max * 56)}px"></span></td>`).join("")}</tr>`).join("")}</tbody></table>`;
+  } else if (d) {
+    const list = d.members || d.dimensions || d.applications || d.databases;
+    if (Array.isArray(list)) {
+      const cols = typeof list[0] === "object" ? Object.keys(list[0]) : ["name"];
+      body += `<table><thead><tr>${cols.map((c) => `<th>${esc(c)}</th>`).join("")}</tr></thead><tbody>${
+        list.map((x) => `<tr>${cols.map((c) => `<td>${esc(typeof x === "object" ? (x[c] ?? "") : x)}</td>`).join("")}</tr>`).join("")}</tbody></table>`;
+    } else body += `<pre>${esc(JSON.stringify(d, null, 2))}</pre>`;
   }
-  const list = d.members || d.dimensions || d.applications || d.databases;
-  if (Array.isArray(list)) {
-    const cols = typeof list[0] === "object" ? Object.keys(list[0]) : ["name"];
-    el.innerHTML = `<table><thead><tr>${cols.map((c) => `<th>${esc(c)}</th>`).join("")}</tr></thead><tbody>${
-      list.map((x) => `<tr>${cols.map((c) => `<td>${esc(typeof x === "object" ? (x[c] ?? "") : x)}</td>`).join("")}</tr>`).join("")}</tbody></table>`;
-    return;
-  }
-  el.innerHTML = `<pre>${esc(JSON.stringify(d, null, 2))}</pre>`;
+  // "understood as" summary, grouped by member
+  const groups = {};
+  p.entities.forEach((e) => { (groups[e.text] ||= []).push(e.member); });
+  const pairs = Object.entries(groups).map(([t, ms]) =>
+    t.toLowerCase() === ms.join(", ").toLowerCase() ? `<span class="pair"><b>${esc(t)}</b></span>`
+      : `<span class="pair">${esc(t)} → <b>${esc(ms.join(", "))}</b></span>`);
+  const understood = pairs.length ? `Understood as ${pairs.join(" · ")}` : "No cube members recognized.";
+  const details = `<details class="more"><summary>Show details</summary>
+    <dl><dt>Kind</dt><dd>${esc(INTENTS[p.intent] || p.intent)} <span class="muted">(${Math.round(p.confidence * 100)}% sure)</span></dd>
+      <dt>Tool</dt><dd>${p.tool ? `<code>${esc(p.tool)}</code>` : "—"}</dd>
+      <dt>Matched by</dt><dd>${p.entities.length ? p.entities.map((e) => `${esc(e.text)} → ${esc(e.dimension)}:${esc(e.member)} <span class="muted">(${esc(e.via)})</span>`).join("<br>") : "—"}</dd>
+      <dt>Time</dt><dd>${r.elapsed_ms} ms</dd></dl>
+    ${p.arguments?.query ? `<pre>${esc(formatMdx(p.arguments.query))}</pre>` : p.tool ? `<pre>${esc(JSON.stringify(p.arguments, null, 2))}</pre>` : ""}
+  </details>`;
+  return `<div class="card">
+    <div class="answer-head"><h2>${esc(question)}</h2><div class="spacer"></div>
+      ${hasCsv ? `<button class="btn ghost sm" id="csvBtn">Download CSV</button>` : ""}</div>
+    ${body || ""}
+    <div class="understood">${understood}${details}</div></div>`;
 }
+const formatMdx = (q) => q.replace(/^SELECT /, "SELECT\n  ").replace(/ ON COLUMNS, /, " ON COLUMNS,\n  ").replace(/ FROM /, "\nFROM ").replace(/ WHERE /, "\nWHERE ");
 function downloadCsv(d) {
-  const lines = [["", ...d.columns], ...d.rows.map((r) => [r.member, ...r.values])]
-    .map((r) => r.map((v) => `"${String(v).replace(/"/g, '""')}"`).join(","));
+  const lines = [["", ...d.columns], ...d.rows.map((r) => [r.member, ...r.values])].map((r) => r.map((v) => `"${String(v).replace(/"/g, '""')}"`).join(","));
   const a = document.createElement("a");
-  a.href = URL.createObjectURL(new Blob([lines.join("\n")], {type: "text/csv"}));
-  a.download = `${status.active_cube}-result.csv`; a.click();
+  a.href = URL.createObjectURL(new Blob([lines.join("\n")], {type: "text/csv"})); a.download = `${status.active_cube}.csv`; a.click();
 }
 
-// ================= catalog =================
+// ---------------- cubes ----------------
 let catalogData = null;
 async function loadCatalog() {
-  $("catalogMsg").textContent = "Reading from server…";
-  try {
-    catalogData = await api("/api/catalog");
-    $("catalogMsg").textContent = "";
-    renderCatalog();
-  } catch (e) { $("catalog").innerHTML = note("bad", e.message); $("catalogMsg").textContent = ""; }
+  $("catalogMsg").textContent = "Reading from Essbase…";
+  try { catalogData = await api("/api/catalog"); $("catalogMsg").textContent = ""; renderCatalog(); }
+  catch (e) { $("catalog").innerHTML = msg("bad", e.message); $("catalogMsg").textContent = ""; }
 }
 function renderCatalog() {
   const rows = catalogData.applications.flatMap((a) => a.error
-    ? [`<tr><td>${esc(a.application)}</td><td colspan="3" style="color:var(--bad)">${esc(a.error)}</td></tr>`]
-    : a.databases.map((d) => `<tr>
-      <td>${esc(a.application)}</td><td>${esc(d.name)}</td>
-      <td>${d.cube === catalogData.active_cube ? '<span class="badge active">active</span> ' : ""}${d.saved
-        ? `<span class="badge">context saved</span> <small class="muted">${d.generated_at ? new Date(d.generated_at).toLocaleString() : ""}</small>`
-        : '<span class="muted">not built</span>'}</td>
-      <td style="text-align:right;white-space:nowrap">
-        <button class="secondary small" data-build="${esc(a.application)}|${esc(d.name)}">${d.saved ? "Refresh" : "Build"}</button>
-        ${d.saved && d.cube !== catalogData.active_cube ? `<button class="primary small" data-use="${esc(d.cube)}">Use</button>` : ""}
-      </td></tr>`));
-  $("catalog").innerHTML = rows.length ? `<table><thead><tr><th>Application</th><th>Cube</th><th>Status</th><th></th></tr></thead>
-    <tbody>${rows.join("")}</tbody></table>` : `<div class="empty">The server returned no applications.</div>`;
+    ? [`<tr><td>${esc(a.application)}</td><td colspan="2" style="color:var(--bad)">${esc(a.error)}</td></tr>`]
+    : a.databases.map((d) => {
+      const active = d.cube === catalogData.active_cube;
+      return `<tr><td><b>${esc(a.application)}</b>.${esc(d.name)}</td>
+        <td>${active ? '<span class="tag blue">in use</span>' : d.saved ? '<span class="tag ok">loaded</span>' : '<span class="tag">not loaded</span>'}
+          ${d.saved && d.generated_at ? `<span class="muted small"> · ${new Date(d.generated_at).toLocaleDateString()}</span>` : ""}</td>
+        <td style="text-align:right;white-space:nowrap">
+          ${d.saved ? `<button class="btn ghost sm" data-build="${esc(a.application)}|${esc(d.name)}">Refresh</button>`
+                    : `<button class="btn sm" data-build="${esc(a.application)}|${esc(d.name)}">Load</button>`}
+          ${d.saved && !active ? `<button class="btn primary sm" data-use="${esc(d.cube)}">Use</button>` : ""}</td></tr>`;
+    }));
+  $("catalog").innerHTML = rows.length ? `<table><thead><tr><th>Cube</th><th>Status</th><th></th></tr></thead><tbody>${rows.join("")}</tbody></table>`
+                                       : `<div class="empty">Essbase returned no applications for this access level.</div>`;
   $("catalog").querySelectorAll("[data-build]").forEach((b) => b.onclick = () => buildCube(...b.dataset.build.split("|"), b));
-  $("catalog").querySelectorAll("[data-use]").forEach((b) => b.onclick = async () => {
-    $("cubeSelect").value = b.dataset.use; await $("cubeSelect").onchange({target: {value: b.dataset.use}}); loadCatalog();
-  });
+  $("catalog").querySelectorAll("[data-use]").forEach((b) => b.onclick = async () => { await activateCube(b.dataset.use); loadCatalog(); });
 }
 async function buildCube(application, database, btn, activate = true) {
-  if (btn) { btn.disabled = true; btn.textContent = "Building…"; }
+  if (btn) { btn.disabled = true; btn.textContent = "Loading…"; }
   try {
     const c = await api(`/api/context/build?activate=${activate}`, {method: "POST", body: JSON.stringify({application, database})});
-    if (activate) { ctx = c; await loadStatus(); renderContext(); resetAsk(); }
+    if (activate) { ctx = c; await loadStatus(); resetAsk(); }
     await loadCubes();
   } catch (e) { alert(`${application}.${database}: ${e.message}`); }
   if (btn) loadCatalog();
@@ -510,148 +492,142 @@ async function buildCube(application, database, btn, activate = true) {
 $("refreshCatalog").onclick = loadCatalog;
 $("buildAll").onclick = async () => {
   const missing = catalogData.applications.flatMap((a) => a.databases.filter((d) => !d.saved).map((d) => [a.application, d.name]));
-  if (!missing.length) { $("catalogMsg").textContent = "Every cube already has a context."; return; }
+  if (!missing.length) { $("catalogMsg").textContent = "Every cube is already loaded."; return; }
   $("buildAll").disabled = true;
-  for (const [i, [a, d]] of missing.entries()) {
-    $("catalogMsg").textContent = `Building ${a}.${d} (${i + 1}/${missing.length})…`;
-    await buildCube(a, d, null, !ctx && i === 0);
-  }
-  $("buildAll").disabled = false; $("catalogMsg").textContent = `Built ${missing.length} cube(s).`;
-  loadCatalog();
+  for (const [i, [a, d]] of missing.entries()) { $("catalogMsg").textContent = `Loading ${a}.${d} (${i + 1}/${missing.length})…`; await buildCube(a, d, null, !ctx && i === 0); }
+  $("buildAll").disabled = false; $("catalogMsg").textContent = `Loaded ${missing.length} cube(s).`; loadCatalog();
 };
 
-// ================= context =================
+// ---------------- context ----------------
 function renderContext() {
+  $("ctxCube").textContent = status?.active_cube || "";
   $("noContext").hidden = !!ctx; $("contextBody").hidden = !ctx;
   if (!ctx) return;
-  $("ctxCube").textContent = `${ctx.cube.application}.${ctx.cube.database}`;
-  $("builtAt").textContent = ctx.generated_at ? "Built " + new Date(ctx.generated_at).toLocaleString() : "";
-  $("ctxMsg").innerHTML = "";
-  const members = ctx.dimensions.flatMap((d) => d.members.map((m) => m.name));
+  const memberCount = ctx.dimensions.reduce((n, d) => n + d.members.length, 0);
+  $("stats").innerHTML = [[ctx.dimensions.length, "dimensions"], [memberCount, "members"], [ctx.tools.length, "Essbase tools"],
+    [ctx.generated_at ? new Date(ctx.generated_at).toLocaleDateString() : "—", "last refreshed"]]
+    .map(([n, l]) => `<div class="stat"><b>${esc(n)}</b><span>${l}</span></div>`).join("");
+  $("dims").innerHTML = ctx.dimensions.map((d) => `<details><summary><b>${esc(d.name)}</b><span>${d.members.length} members</span></summary>
+    <div class="members">${d.members.map((m) => `<div>${esc(m.name)}${m.alias ? ` <small>${esc(m.alias)}</small>` : ""}</div>`).join("")}</div></details>`).join("");
+
   let dl = $("memberList");
   if (!dl) { dl = document.createElement("datalist"); dl.id = "memberList"; document.body.appendChild(dl); }
-  dl.innerHTML = members.map((o) => `<option value="${esc(o)}">`).join("");
-
+  dl.innerHTML = ctx.dimensions.flatMap((d) => d.members.map((m) => `<option value="${esc(m.name)}">${esc(m.alias || d.name)}</option>`)).join("");
   $("glossary").innerHTML = "";
-  Object.entries(ctx.glossary || {}).forEach(([k, v]) => addGlossaryRow(k, Array.isArray(v) ? v.join(", ") : v));
-  if (!Object.keys(ctx.glossary || {}).length) addGlossaryRow();
+  Object.entries(ctx.glossary || {}).forEach(([k, v]) => addTerm(k, Array.isArray(v) ? v.join(", ") : v));
+  if (!Object.keys(ctx.glossary || {}).length) addTerm();
 
-  $("defaults").innerHTML = ctx.dimensions.map((d) => `<tr><td>${esc(d.name)}</td><td>
-    <select data-dim="${esc(d.name)}"><option value="">— none —</option>${d.members.map((m) =>
-      `<option ${ctx.defaults?.[d.name] === m.name ? "selected" : ""}>${esc(m.name)}</option>`).join("")}</select></td></tr>`).join("");
-
-  const toolOpts = ctx.tools.map((t) => t.name);
-  $("intents").innerHTML = INTENTS.map((i) => `<tr><td>${i}</td><td><select data-intent="${i}">
-    <option value="">— not available —</option>${toolOpts.map((t) =>
-      `<option ${ctx.intents?.[i] === t ? "selected" : ""}>${esc(t)}</option>`).join("")}</select></td></tr>`).join("");
-
+  $("defaults").innerHTML = ctx.dimensions.map((d) => `<div><label>${esc(d.name)}</label>
+    <select data-dim="${esc(d.name)}"><option value="">No assumption</option>${d.members.map((m) =>
+      `<option ${ctx.defaults?.[d.name] === m.name ? "selected" : ""}>${esc(m.name)}</option>`).join("")}</select></div>`).join("");
   $("notes").value = ctx.notes || "";
   $("examplesText").value = (ctx.examples || []).map((e) => e.question || e).join("\n");
-  $("tools").innerHTML = ctx.tools.map((t) =>
-    `<tr><td><code>${esc(t.name)}</code></td><td class="muted">${esc(t.description)}</td></tr>`).join("");
-  $("dims").innerHTML = ctx.dimensions.map((d) => `
-    <details><summary>${esc(d.name)}<span>${esc(d.type)} · ${d.members.length} members</span></summary>
-      <div class="members">${d.members.map((m) => `<div>${esc(m.name)}${m.alias ? ` <small>(${esc(m.alias)})</small>` : ""}</div>`).join("")}</div>
-    </details>`).join("");
+  $("intents").innerHTML = Object.entries(INTENTS).map(([i, label]) => `<tr><td>${esc(label)}</td><td style="width:45%">
+    <select data-intent="${i}"><option value="">Not available</option>${ctx.tools.map((t) =>
+      `<option ${ctx.intents?.[i] === t.name ? "selected" : ""}>${esc(t.name)}</option>`).join("")}</select></td></tr>`).join("");
+  $("tools").innerHTML = ctx.tools.map((t) => `<tr><td style="width:38%"><code>${esc(t.name)}</code></td><td class="muted small">${esc(t.description)}</td></tr>`).join("");
 }
-function addGlossaryRow(k = "", v = "") {
-  $("glossary").insertAdjacentHTML("beforeend", `<tr>
-    <td><input class="term" value="${esc(k)}" placeholder="e.g. revenue"></td>
-    <td><input class="member" list="memberList" value="${esc(v)}" placeholder="e.g. Sales  or  New York, California"></td>
-    <td><button class="link" type="button" title="Remove" onclick="this.closest('tr').remove()">✕</button></td></tr>`);
+function addTerm(k = "", v = "") {
+  $("glossary").insertAdjacentHTML("beforeend", `<tr><td><input class="term" value="${esc(k)}" placeholder="e.g. revenue"></td>
+    <td><input class="member" list="memberList" value="${esc(v)}" placeholder="e.g. Sales"></td>
+    <td><button class="x" type="button" title="Remove" onclick="this.closest('tr').remove(); setDirty(true)">✕</button></td></tr>`);
 }
-$("addTerm").onclick = () => addGlossaryRow();
+$("addTerm").onclick = () => { addTerm(); $("glossary").lastElementChild.querySelector("input").focus(); };
 
-$("saveContext").onclick = async () => {
-  const glossary = {};
+async function saveContext() {
+  const glossary = {}, defaults = {}, intents = {};
   document.querySelectorAll("#glossary tr").forEach((tr) => {
     const t = tr.querySelector(".term").value.trim();
     const ms = tr.querySelector(".member").value.split(",").map((s) => s.trim()).filter(Boolean);
     if (t && ms.length) glossary[t] = ms.length === 1 ? ms[0] : ms;
   });
-  const defaults = {}, intents = {};
   document.querySelectorAll("#defaults select").forEach((s) => { if (s.value) defaults[s.dataset.dim] = s.value; });
   document.querySelectorAll("#intents select").forEach((s) => { intents[s.dataset.intent] = s.value; });
   const examples = $("examplesText").value.split("\n").map((s) => s.trim()).filter(Boolean).map((question) => ({question}));
+  $("saveBtn").disabled = true;
   try {
-    ctx = await api("/api/context", {method: "PATCH",
-      body: JSON.stringify({glossary, defaults, intents, notes: $("notes").value, examples})});
-    renderContext(); renderExamples();
-    $("ctxMsg").innerHTML = note("ok", "Saved.");
-  } catch (e) { $("ctxMsg").innerHTML = note("bad", e.message); }
+    ctx = await api("/api/context", {method: "PATCH", body: JSON.stringify({glossary, defaults, intents, notes: $("notes").value, examples})});
+    setDirty(false); renderContext(); resetAsk(); flash("Saved.");
+  } catch (e) { $("saveMsg").innerHTML = `<span style="color:var(--bad)">${esc(e.message)}</span>`; }
+  $("saveBtn").disabled = false;
+}
+$("rebuild").onclick = async () => {
+  $("rebuild").disabled = true; $("rebuild").textContent = "Refreshing…";
+  await buildCube(ctx.cube.application, ctx.cube.database, null);
+  $("rebuild").disabled = false; $("rebuild").textContent = "Refresh from Essbase"; renderContext(); flash("Refreshed. Your edits were kept.");
 };
-$("rebuild").onclick = () => buildCube(ctx.cube.application, ctx.cube.database, null).then(() =>
-  $("ctxMsg").innerHTML = note("ok", "Refreshed from server. Your curated sections were kept."));
+function flash(text) {
+  $("savebar").classList.add("show"); $("saveMsg").innerHTML = `<span style="color:var(--ok)">✓ ${esc(text)}</span>`;
+  ["discardBtn", "saveBtn", "testBtn"].forEach((id) => $(id).classList.add("hide"));
+  setTimeout(() => { $("savebar").classList.remove("show"); ["discardBtn", "saveBtn", "testBtn"].forEach((id) => $(id).classList.remove("hide")); }, 1800);
+}
 
-// ================= admin =================
+// ---------------- admin ----------------
+function renderConnCard() {
+  const s = status; if (!s) return;
+  $("connCard").innerHTML = `<div class="row"><span class="dot ${s.connected ? "ok" : "bad"}"></span>
+    <b>${s.connected ? "Connected" : "Not connected"}</b>
+    <span class="muted">· ${s.mode === "mock" ? "built-in sample server" : esc(s.mcp_url)} · ${esc(s.profile)}</span></div>
+    ${s.error ? msg("bad", s.error) : `<div class="muted small" style="margin-top:6px">${s.server ? esc(s.server.name) + " " + esc(s.server.version || "") : ""}${
+      s.token_expires_in ? ` · sign-in valid for ${Math.round(s.token_expires_in / 60)} min` : ""}</div>`}`;
+}
 async function loadAdmin() {
-  try {
-    fillAdmin(await api("/api/admin/settings"));
-    $("adminMsg").innerHTML = "";
-  } catch (e) { $("adminMsg").innerHTML = `<span class="pill bad">${esc(e.message)}</span>`; }
+  try { fillAdmin(await api("/api/admin/settings")); setDirty(false); }
+  catch (e) { $("connCard").innerHTML = msg("bad", e.message); }
 }
 function fillAdmin(s) {
   const f = $("adminForm");
-  f.querySelectorAll(`input[name=mode]`).forEach((r) => r.checked = r.value === s.mode);
+  f.querySelectorAll("input[name=mode]").forEach((r) => r.checked = r.value === s.mode);
   ["mcp_url", "token_url", "client_id", "scope", "llm_base_url", "llm_model"].forEach((k) => f.elements[k].value = s[k] ?? "");
   ["profile", "auth_mode", "llm_provider"].forEach((k) => f.elements[k].value = s[k]);
   f.elements.verify_tls.checked = !!s.verify_tls;
   for (const k of ["client_secret", "access_token", "llm_api_key"]) {
-    f.elements[k].value = "";
-    f.elements[k].placeholder = s[`${k}_set`] ? "•••••• saved (leave blank to keep)" : "not set";
+    f.elements[k].value = ""; f.elements[k].placeholder = s[`${k}_set`] ? "•••••• saved" : "not set";
   }
-  f.elements.clear_client_secret.checked = false;
-  $("clearSecretWrap").hidden = !s.client_secret_set;
-  syncAdminVisibility();
+  f.elements.clear_client_secret.checked = false; $("clearSecretWrap").hidden = !s.client_secret_set;
+  syncAdmin();
 }
-function syncAdminVisibility() {
-  const f = $("adminForm");
-  const remote = f.querySelector("input[name=mode]:checked")?.value === "remote";
-  document.querySelectorAll(".remote-only").forEach((el) => el.classList.toggle("hidden", !remote));
-  const am = f.elements.auth_mode.value;
-  document.querySelectorAll(".cc").forEach((el) => el.style.display = remote && am === "client_credentials" ? "" : "none");
-  document.querySelectorAll(".tok").forEach((el) => el.style.display = remote && am === "token" ? "" : "none");
-  document.querySelectorAll(".llm").forEach((el) => el.style.display = f.elements.llm_provider.value === "none" ? "none" : "");
+function syncAdmin() {
+  const f = $("adminForm"), remote = f.querySelector("input[name=mode]:checked")?.value === "remote", am = f.elements.auth_mode.value;
+  document.querySelectorAll("#adminForm .remote").forEach((el) => el.classList.toggle("hide", !remote));
+  document.querySelectorAll("#adminForm .cc").forEach((el) => el.classList.toggle("hide", am !== "client_credentials"));
+  document.querySelectorAll("#adminForm .tok").forEach((el) => el.classList.toggle("hide", am !== "token"));
+  document.querySelectorAll("#adminForm .llm").forEach((el) => el.classList.toggle("hide", f.elements.llm_provider.value === "none"));
+  $("aiNum").textContent = remote ? "3" : "2";
 }
-$("adminForm").addEventListener("change", syncAdminVisibility);
 function adminPayload() {
-  const f = $("adminForm"), out = {};
-  out.mode = f.querySelector("input[name=mode]:checked")?.value;
+  const f = $("adminForm"), out = {mode: f.querySelector("input[name=mode]:checked")?.value};
   ["mcp_url", "token_url", "client_id", "scope", "llm_base_url", "llm_model", "profile", "auth_mode", "llm_provider",
    "client_secret", "access_token", "llm_api_key"].forEach((k) => out[k] = f.elements[k].value);
-  out.verify_tls = f.elements.verify_tls.checked;
-  out.clear_client_secret = f.elements.clear_client_secret.checked;
+  out.verify_tls = f.elements.verify_tls.checked; out.clear_client_secret = f.elements.clear_client_secret.checked;
   return out;
 }
-$("testSettings").onclick = async () => {
-  $("adminMsg").innerHTML = `<span class="muted">Testing…</span>`;
+async function testAdmin() {
+  $("saveMsg").textContent = "Testing…";
   try {
     const r = await api("/api/admin/test", {method: "POST", body: JSON.stringify(adminPayload())});
-    $("adminMsg").innerHTML = r.ok ? `<span class="pill ok">Works · ${esc(r.server.name)} · ${r.tool_count} tools (not saved yet)</span>`
-                                   : `<span class="pill bad">${esc(r.error)}</span>`;
-  } catch (e) { $("adminMsg").innerHTML = `<span class="pill bad">${esc(e.message)}</span>`; }
-};
-$("adminForm").onsubmit = async (e) => {
-  e.preventDefault();
-  $("adminMsg").innerHTML = `<span class="muted">Saving…</span>`;
+    $("saveMsg").innerHTML = r.ok ? `<span style="color:var(--ok)">✓ Works: ${esc(r.server.name)}, ${r.tool_count} tools. Not saved yet.</span>`
+                                  : `<span style="color:var(--bad)">${esc(r.error)}</span>`;
+  } catch (e) { $("saveMsg").innerHTML = `<span style="color:var(--bad)">${esc(e.message)}</span>`; }
+}
+async function saveAdmin() {
+  $("saveBtn").disabled = true;
   try {
     const r = await api("/api/admin/settings", {method: "PUT", body: JSON.stringify(adminPayload())});
-    fillAdmin(r.settings);
-    $("adminMsg").innerHTML = r.connection.ok
-      ? `<span class="pill ok">Saved · connected to ${esc(r.connection.server.name)}</span>`
-      : `<span class="pill warn">Saved, but connection failed: ${esc(r.connection.error)}</span>`;
+    fillAdmin(r.settings); setDirty(false);
     await loadStatus(); await loadCubes();
-    ctx = status.has_context ? await api("/api/context") : null;
-    renderContext(); resetAsk();
-  } catch (err) { $("adminMsg").innerHTML = `<span class="pill bad">${esc(err.message)}</span>`; }
-};
+    ctx = status.has_context ? await api("/api/context") : null; resetAsk();
+    flash(r.connection.ok ? "Saved and connected." : "Saved, but the connection failed (see above).");
+  } catch (e) { $("saveMsg").innerHTML = `<span style="color:var(--bad)">${esc(e.message)}</span>`; }
+  $("saveBtn").disabled = false;
+}
 
-// ================= boot =================
+// ---------------- boot ----------------
 (async () => {
   await loadStatus(); await loadCubes();
   ctx = status.has_context ? await api("/api/context") : null;
-  renderContext(); resetAsk();
-  if (!ctx) showTab("catalog");
+  resetAsk();
+  if (!ctx) showTab("cubes");
 })();
 </script>
 </body>

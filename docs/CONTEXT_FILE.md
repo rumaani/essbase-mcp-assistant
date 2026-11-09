@@ -1,7 +1,8 @@
 # Context file format (`contexts/<App>.<Db>.yaml`)
 
-One file per cube. Build or refresh it from **Catalog** (or `emcp context build`). Curate it from
-**Context**. A refresh replaces the generated sections and keeps the curated ones.
+One file per cube. Load or refresh it from **Cubes** (or `emcp context build`). Curate it from
+**Context**, where the curated sections appear as steps: Vocabulary = `glossary`, Assumptions = `defaults`,
+Business rules = `notes`, Example questions = `examples`, and Advanced = `intents`. A refresh replaces the generated sections and keeps the curated ones.
 
 | Section | Source | Purpose |
 |---|---|---|

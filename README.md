@@ -63,6 +63,12 @@ roles and filters. The same question returns different data for different people
 `#NoAccess` where a filter hides cells. The built-in sample has three demo users with
 different filters. Setup for a real 26ai: [docs/PER_USER_SECURITY.md](docs/PER_USER_SECURITY.md).
 
+**Single sign-on with Microsoft Entra ID.** Choose *Sign-in page → Microsoft Entra ID*, and people
+are signed in with their work account automatically, with no page at all if they're already
+signed in to Microsoft. Entra ID is federated with the identity domain, so Essbase still gets
+identity-domain tokens and applies each person's filters.
+See [docs/ENTRA_SSO.md](docs/ENTRA_SSO.md).
+
 ## Many users at once
 All users share one sign-in, one MCP session and one connection pool. Token refresh and session
 recovery happen once, not per user. Parallel Essbase calls are capped, with a queue and a
@@ -87,7 +93,7 @@ emcp context build --app ASOSamp --db Basic     # save metadata -> contexts/ASOS
 emcp ask "Units by geography" --dry-run         # show the plan only
 emcp ask "Units by geography"                   # plan + run
 emcp --remote tools                             # force the configured server for one command
-pytest                                          # 42 tests, all against the mock
+pytest                                          # 49 tests, all against the mock
 python scripts/loadtest.py --users 100           # against a running `emcp web`
 ```
 
@@ -101,11 +107,11 @@ src/essbase_mcp/
   context/    builder, argument fitting, per-cube store, shared cache with revisions
   planner/    entity linker, intent rules, MDX builder, multi-step planner + executor
   llm/        optional OpenAI-compatible intent hint (gets glossary + notes)
-  mock/       mock identity domain + Essbase MCP: Sample.Basic, ASOSamp.Basic
+  mock/       mock identity domain (+ mock Entra ID federation) + Essbase MCP: Sample.Basic, ASOSamp.Basic
   web/        FastAPI backend-for-frontend + single-page UI (no Node build)
 contexts/     context files (one per cube)
 data/         saved settings + encryption key (git-ignored)
-docs/         ARCHITECTURE, CONTEXT_FILE, CONCURRENCY, PER_USER_SECURITY, ADMIN, ROADMAP
+docs/         ARCHITECTURE, CONTEXT_FILE, CONCURRENCY, PER_USER_SECURITY, ENTRA_SSO, ADMIN, ROADMAP
 scripts/      loadtest.py
 ```
 

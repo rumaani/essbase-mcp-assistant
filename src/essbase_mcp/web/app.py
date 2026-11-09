@@ -94,6 +94,10 @@ class Runtime:
         self.client = runtime.connect(settings, metrics, http=self.http, slots=self.slots)
         self.contexts = ContextCache(settings.context_dir)
         self.users = SessionStore(settings.session_hours)
+        if settings.mode == "mock":  # stands in for the identity domain's IdP policy
+            from essbase_mcp.mock import server as mock_server
+
+            mock_server.IDP_POLICY = "entra" if settings.sso_provider == "entra" else "local"
         self.last_error: str | None = None
         self._tools: list[dict] | None = None
         self._tools_lock = threading.Lock()
@@ -313,8 +317,11 @@ def create_app(session: Session) -> FastAPI:
 
     @app.post("/auth/logout")
     def auth_logout(request: Request):
+        """Ends the app session. With SSO the Microsoft session stays (so the next sign-in is
+        instant) unless a sign-out URL is configured; the browser is sent there next."""
         session.rt.users.remove(request.cookies.get(COOKIE))
-        out = JSONResponse({"signed_out": True})
+        nxt = runtime.effective(session.settings).signout_url or None
+        out = JSONResponse({"signed_out": True, "redirect": nxt})
         out.delete_cookie(COOKIE)
         return out
 
@@ -325,6 +332,7 @@ def create_app(session: Session) -> FastAPI:
             return {"identity_mode": "shared", "signed_in": False}
         user = rt.users.get(request.cookies.get(COOKIE))
         return {"identity_mode": "per_user", "signed_in": bool(user),
+                "sso_provider": rt.settings.sso_provider, "auto_signin": rt.settings.auto_signin,
                 "name": user.name if user else None, "subject": user.subject if user else None}
 
     # ----- status ----------------------------------------------------------------------

@@ -22,7 +22,9 @@ def effective(s: Settings) -> Settings:
         s, mcp_url=f"{MOCK_BASE}/essbase/rest/v1/ess-mcp",
         token_url=f"{MOCK_BASE}/oauth2/v1/token", auth_mode="client_credentials",
         client_id=mock.CLIENT_ID, client_secret=mock.CLIENT_SECRET,
-        authorize_url="/mock/oauth2/v1/authorize")  # served by this app in mock mode
+        authorize_url="/mock/oauth2/v1/authorize",  # served by this app in mock mode
+        signout_url=s.signout_url or ("/mock/entra/signout?return=/" if s.sso_provider == "entra"
+                                      else ""))
 
 
 def authorize_url(s: Settings) -> str:

@@ -162,10 +162,10 @@
   <!-- shown instead of Ask / Cubes / Context until the person signs in (per-user mode) -->
   <section id="signinGate" hidden>
     <div class="card" style="text-align:center;padding:40px 22px">
-      <h1 class="page-title">Sign in to continue</h1>
-      <p class="page-sub" style="margin:6px auto 20px;max-width:520px">Essbase shows each person only the data their
+      <h1 class="page-title" id="gateTitle">Sign in to continue</h1>
+      <p class="page-sub" id="gateText" style="margin:6px auto 20px;max-width:540px">Essbase shows each person only the data their
         security filters allow, so you need to sign in with your own account first.</p>
-      <a class="btn primary" href="/auth/login" style="text-decoration:none;display:inline-block">Sign in</a>
+      <a class="btn primary" href="/auth/login" id="gateBtn" onclick="allowAuto()" style="text-decoration:none;display:inline-block">Sign in</a>
     </div>
   </section>
 
@@ -288,7 +288,8 @@
             <span>Essbase applies each person’s own roles and filters.</span></div></label>
         </div>
         <div class="msg info mockonly peruser" style="margin-left:40px">The built-in sample has three demo users to sign in as:
-          <b>Alice</b> (East only), <b>Bob</b> (West only) and <b>Carol</b> (all data).</div>
+          <b>Alice</b> (East only), <b>Bob</b> (West only) and <b>Carol</b> (all data). Choose
+          <i>Microsoft Entra ID</i> below to try single sign-on with a mock Microsoft account picker.</div>
         <div class="form remote" style="margin-top:16px">
           <label class="shared" for="auth_mode">Method</label>
           <select class="shared" id="auth_mode" name="auth_mode"><option value="client_credentials">OAuth client credentials</option>
@@ -307,6 +308,15 @@
           <div class="hint peruser"><code>offline_access</code> gives a refresh token so people stay signed in; the app needs the Refresh Token grant.</div>
         </div>
         <div class="form peruser" style="margin-top:12px">
+          <label for="sso_provider">Sign-in page</label>
+          <select id="sso_provider" name="sso_provider">
+            <option value="identity_domain">Identity domain sign-in page</option>
+            <option value="entra">Microsoft Entra ID (single sign-on)</option></select>
+          <div class="hint">With Entra ID, your identity domain sends people to Microsoft. Set it up as the domain’s
+            identity provider first (see <code>docs/ENTRA_SSO.md</code>).</div>
+          <label></label><label class="small" style="color:var(--ink)"><input type="checkbox" name="auto_signin"> Sign people in automatically when they open the app</label>
+          <label for="signout_url">Also sign out of</label><input id="signout_url" name="signout_url" placeholder="optional: SSO sign-out URL">
+          <div class="hint">Leave blank to keep people signed in to Microsoft after they leave this app (the usual choice).</div>
           <label for="session_hours">Sign out after (hours idle)</label><input id="session_hours" name="session_hours" type="number" min="1" max="168">
         </div>
       </div>
@@ -364,6 +374,7 @@ const gated = () => me?.identity_mode === "per_user" && !me.signed_in;
 function applyGate() {
   const block = gated() && currentTab !== "admin";
   $("signinGate").hidden = !block;
+  $("cubeSelect").hidden = gated();
   document.querySelectorAll(".tab").forEach((t) => t.classList.toggle("active", !block && t.id === "tab-" + currentTab));
 }
 function renderUser() {
@@ -371,10 +382,42 @@ function renderUser() {
   if (me?.identity_mode !== "per_user") { box.innerHTML = ""; return; }
   box.innerHTML = me.signed_in
     ? `· <b style="color:var(--ink)">${esc(me.name)}</b> <button class="btn ghost sm" id="signOut">Sign out</button>`
-    : `· <a class="btn primary sm" href="/auth/login" style="text-decoration:none">Sign in</a>`;
-  if (me.signed_in) $("signOut").onclick = async () => { await api("/auth/logout", {method: "POST"}); location.reload(); };
+    : `· <a class="btn primary sm" href="/auth/login" onclick="allowAuto()" style="text-decoration:none">${isMicrosoft() ? "Sign in with Microsoft" : "Sign in"}</a>`;
+  if (me.signed_in) {
+    ss.del("emcp.autotry");
+    $("signOut").onclick = async () => {
+      const r = await api("/auth/logout", {method: "POST"});
+      ss.set("emcp.noauto", "1");  // don't sign straight back in through SSO
+      if (r.redirect) location.href = r.redirect; else location.reload();
+    };
+  }
+  renderGate();
 }
 async function loadMe() { me = await api("/api/me"); renderUser(); applyGate(); }
+
+// ---- single sign-on: send people to sign-in automatically, without loops ----
+const ss = {get: (k) => { try { return sessionStorage.getItem(k); } catch { return null; } },
+            set: (k, v) => { try { sessionStorage.setItem(k, v); } catch { /* ignore */ } },
+            del: (k) => { try { sessionStorage.removeItem(k); } catch { /* ignore */ } }};
+const isMicrosoft = () => me?.sso_provider === "entra";
+function allowAuto() { ss.del("emcp.noauto"); }
+function maybeAutoSignin() {
+  if (!gated() || !me?.auto_signin) return false;
+  if (ss.get("emcp.noauto")) return false;                       // they just signed out
+  const tried = Number(ss.get("emcp.autotry") || 0);
+  if (Date.now() - tried < 60000) return false;                  // came back without a session: stop
+  ss.set("emcp.autotry", String(Date.now()));
+  location.href = "/auth/login";
+  return true;
+}
+function renderGate() {
+  const ms = isMicrosoft();
+  $("gateTitle").textContent = ms ? "Sign in with your work account" : "Sign in to continue";
+  $("gateText").textContent = ms
+    ? "Essbase shows each person only the data their security filters allow. Sign in with Microsoft. If you're already signed in to Windows or Microsoft 365, this takes a second."
+    : "Essbase shows each person only the data their security filters allow, so you need to sign in with your own account first.";
+  $("gateBtn").textContent = ms ? "Sign in with Microsoft" : "Sign in";
+}
 // Each browser picks its own cube; it never changes what other users see.
 let cube = null;
 const savedCube = () => { try { return localStorage.getItem("emcp.cube"); } catch { return null; } };
@@ -393,7 +436,7 @@ async function api(path, opts = {}, retry = true) {
   const body = await res.json().catch(() => ({}));
   if (res.status === 503) throw new Error("Essbase is busy right now. Please try again in a few seconds.");
   if (res.status === 401 && body.signin) {
-    me = {...(me || {}), identity_mode: "per_user", signed_in: false}; applyGate(); renderUser();
+    me = {...(me || {}), identity_mode: "per_user", signed_in: false}; applyGate(); renderUser(); maybeAutoSignin();
     const e = new Error(body.detail); e.signin = true; throw e;
   }
   if (!res.ok) { const e = new Error(body.detail || res.statusText); e.status = res.status; throw e; }
@@ -423,7 +466,10 @@ function setDirty(v, text = "You have unsaved changes.") {
 $("tab-context").addEventListener("input", () => setDirty(true));
 $("tab-context").addEventListener("change", () => setDirty(true));
 $("adminForm").addEventListener("input", () => setDirty(true));
-$("adminForm").addEventListener("change", () => { syncAdmin(); setDirty(true); });
+$("adminForm").addEventListener("change", (e) => {
+  if (e.target.name === "sso_provider" && e.target.value === "entra") $("adminForm").elements.auto_signin.checked = true;
+  syncAdmin(); setDirty(true);
+});
 $("discardBtn").onclick = () => { setDirty(false); currentTab === "admin" ? loadAdmin() : renderContext(); };
 $("saveBtn").onclick = () => currentTab === "admin" ? saveAdmin() : saveContext();
 $("testBtn").onclick = testAdmin;
@@ -688,7 +734,9 @@ function fillAdmin(s) {
   const f = $("adminForm");
   f.querySelectorAll("input[name=mode]").forEach((r) => r.checked = r.value === s.mode);
   ["mcp_url", "token_url", "client_id", "scope", "llm_base_url", "llm_model", "max_concurrent_calls", "queue_timeout_s",
-   "max_members_per_dimension", "authorize_url", "redirect_url", "user_scope", "session_hours"].forEach((k) => f.elements[k].value = s[k] ?? "");
+   "max_members_per_dimension", "authorize_url", "redirect_url", "user_scope", "session_hours", "signout_url",
+   "sso_provider"].forEach((k) => f.elements[k].value = s[k] ?? "");
+  f.elements.auto_signin.checked = !!s.auto_signin;
   f.querySelectorAll("input[name=identity_mode]").forEach((r) => r.checked = r.value === s.identity_mode);
   ["profile", "auth_mode", "llm_provider"].forEach((k) => f.elements[k].value = s[k]);
   f.elements.verify_tls.checked = !!s.verify_tls;
@@ -716,7 +764,9 @@ function adminPayload() {
     identity_mode: f.querySelector("input[name=identity_mode]:checked")?.value};
   ["mcp_url", "token_url", "client_id", "scope", "llm_base_url", "llm_model", "profile", "auth_mode", "llm_provider",
    "client_secret", "access_token", "llm_api_key", "max_concurrent_calls", "queue_timeout_s",
-   "max_members_per_dimension", "authorize_url", "redirect_url", "user_scope", "session_hours"].forEach((k) => out[k] = f.elements[k].value);
+   "max_members_per_dimension", "authorize_url", "redirect_url", "user_scope", "session_hours", "signout_url",
+   "sso_provider"].forEach((k) => out[k] = f.elements[k].value);
+  out.auto_signin = f.elements.auto_signin.checked;
   out.verify_tls = f.elements.verify_tls.checked; out.clear_client_secret = f.elements.clear_client_secret.checked;
   return out;
 }
@@ -748,7 +798,7 @@ async function saveAdmin() {
 // ---------------- boot ----------------
 (async () => {
   await loadStatus(); await loadMe();
-  if (gated()) return;
+  if (gated()) { maybeAutoSignin(); return; }
   await loadCubes();
   try { ctx = await api(`/api/context?${q(cube)}`); } catch { ctx = null; }
   resetAsk();

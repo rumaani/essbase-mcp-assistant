@@ -12,6 +12,7 @@
 - [x] Free-form notes + one-to-many glossary terms
 - [x] Per-user sign-in (OCI IAM auth code + PKCE): each person's Essbase filters apply
 - [ ] Shared session store (Redis) for several app processes
-- [ ] Entra ID federation guide (via the identity domain)
+- [x] Microsoft Entra ID single sign-on (federated through the identity domain), automatic sign-in
+- [ ] Optional direct Entra token exchange (JWT assertion / Identity Propagation Trust)
 - [ ] Use notes in the rules engine (e.g. fiscal calendar) without an LLM
 - [ ] Expose the assistant itself as an MCP server (so any MCP client can use it)

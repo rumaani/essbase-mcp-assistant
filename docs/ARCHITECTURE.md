@@ -27,13 +27,13 @@ Essbase 26ai MCP (or mock)
 ## Web app (backend-for-frontend)
 ```
 browser ──/api/*──► FastAPI (web/app.py) ──► Session ──► runtime.connect(settings)
-  Ask / Catalog / Context / Admin           │              ├─ mock: in-process mock app
+  Ask / Cubes / Context / Admin             │              ├─ mock: in-process mock app
                                             │              └─ remote: httpx + OAuth
                                             ├─ settings_store (data/settings.json, encrypted)
                                             └─ context store (contexts/<App>.<Db>.yaml)
 ```
 
 ## Context lifecycle
-**Catalog → Build** (or `emcp context build`) refreshes `tools`, `intents` (suggested), and `dimensions`. It preserves the
+**Cubes → Load** (or `emcp context build`) refreshes `tools`, `intents` (suggested), and `dimensions`. It preserves the
 curated sections (`glossary`, `intents` overrides, `defaults`, `examples`). Rebuild whenever
 the outline or the server's catalog changes.

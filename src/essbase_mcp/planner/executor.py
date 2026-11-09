@@ -10,6 +10,7 @@ import time
 from dataclasses import dataclass, field
 from typing import Any
 
+from essbase_mcp.auth.user_sessions import SignInRequired
 from essbase_mcp.context.args import fit
 from essbase_mcp.mcp.client import MCPBusy, MCPClient
 from essbase_mcp.planner.planner import Plan, Planner, Step
@@ -26,8 +27,10 @@ class Outcome:
 
 
 class Executor:
-    def __init__(self, planner: Planner, client: MCPClient | None, cube_entry=None):
+    def __init__(self, planner: Planner, client: MCPClient | None, cube_entry=None,
+                 remember_misses: bool = True):
         self.planner, self.client, self.entry = planner, client, cube_entry
+        self.remember_misses = remember_misses
 
     def run(self, question: str, execute: bool = True) -> Outcome:
         plan = self.planner.plan(question)
@@ -70,7 +73,7 @@ class Executor:
         started = time.perf_counter()
         try:
             res = self.client.call_tool(step.tool, step.arguments)
-        except MCPBusy:
+        except (MCPBusy, SignInRequired):  # the web layer turns these into 503 / 401
             step.status = "failed"
             raise
         except Exception as exc:  # noqa: BLE001 - reported to the user, not swallowed
@@ -123,7 +126,7 @@ class Executor:
         if err:
             return
         hits = self._best_matches(phrase, (payload or {}).get("members", []))
-        if self.entry:
+        if self.entry and (hits or self.remember_misses):
             self.entry.remember(phrase, hits)
         else:
             for d, m, p in hits:

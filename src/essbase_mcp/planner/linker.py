@@ -22,19 +22,22 @@ class MemberIndex:
         self.dim_type = {d["name"]: d.get("type", "regular") for d in ctx.get("dimensions", [])}
         self.top = {d["name"]: next((m["name"] for m in d["members"] if not m.get("parent")),
                                     d["name"]) for d in ctx.get("dimensions", [])}
-        self._idx: dict[str, tuple[str, str, str]] = {}
+        # term -> [(dimension, member, via)]; glossary terms may map to several members
+        self._idx: dict[str, list[tuple[str, str, str]]] = {}
         self.parents = {m.get("parent") for d in ctx.get("dimensions", [])
                         for m in d.get("members", []) if m.get("parent")}
         member_dim = {}
         for d in ctx.get("dimensions", []):
             for m in d.get("members", []):
                 member_dim[m["name"]] = d["name"]
-                self._idx.setdefault(m["name"].lower(), (d["name"], m["name"], "name"))
+                self._idx.setdefault(m["name"].lower(), [(d["name"], m["name"], "name")])
                 if m.get("alias"):
-                    self._idx.setdefault(m["alias"].lower(), (d["name"], m["name"], "alias"))
-        for term, member in (ctx.get("glossary") or {}).items():
-            if member in member_dim:
-                self._idx[term.lower()] = (member_dim[member], member, "glossary")
+                    self._idx.setdefault(m["alias"].lower(), [(d["name"], m["name"], "alias")])
+        for term, target in (ctx.get("glossary") or {}).items():
+            targets = target if isinstance(target, list) else [target]
+            hits = [(member_dim[t], t, "glossary") for t in targets if t in member_dim]
+            if hits:
+                self._idx[str(term).lower()] = hits
 
     def link(self, text: str) -> tuple[list[Entity], list[str], dict[str, str]]:
         """Return (entities, group_by_dimensions, group_parent). Longest match wins.
@@ -49,7 +52,8 @@ class MemberIndex:
             if low[i] in ("by", "per", "each") and i + 1 < len(tokens):
                 nxt = low[i + 1]
                 dim = self.dimensions.get(nxt) or self.dimensions.get(nxt.rstrip("s"))
-                hit = self._idx.get(nxt) or self._idx.get(nxt.rstrip("s"))
+                hits = self._idx.get(nxt) or self._idx.get(nxt.rstrip("s")) or []
+                hit = hits[0] if len(hits) == 1 else None
                 if dim:
                     group_by.append(dim)
                     i += 2
@@ -62,8 +66,8 @@ class MemberIndex:
             for n in range(min(MAX_NGRAM, len(tokens) - i), 0, -1):
                 key = " ".join(low[i:i + n])
                 if key in self._idx:
-                    dim, member, via = self._idx[key]
-                    entities.append(Entity(" ".join(tokens[i:i + n]), dim, member, via))
+                    for dim, member, via in self._idx[key]:
+                        entities.append(Entity(" ".join(tokens[i:i + n]), dim, member, via))
                     i += n
                     break
             else:

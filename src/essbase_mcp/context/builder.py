@@ -72,4 +72,5 @@ def build(client: MCPClient, application: str, database: str) -> dict:
         "glossary": {},
         "defaults": {},
         "examples": [],
+        "notes": "",
     }

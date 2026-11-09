@@ -1,0 +1,183 @@
+version: 1
+generated_at: '2026-11-09T03:07:52+00:00'
+source:
+  server: mock-essbase-mcp
+  url: http://localhost:9100/essbase/rest/v1/ess-mcp
+  profile: viewer
+cube:
+  application: Sample
+  database: Basic
+tools:
+- name: list_applications
+  description: List Essbase applications the user can access.
+  input_schema:
+    type: object
+    properties: {}
+- name: list_databases
+  description: List databases (cubes) in an application.
+  input_schema:
+    type: object
+    required:
+    - application
+    properties:
+      application:
+        type: string
+- name: get_dimensions
+  description: Get the dimensions of a cube with type and member count.
+  input_schema:
+    type: object
+    required:
+    - application
+    - database
+    properties:
+      application:
+        type: string
+      database:
+        type: string
+- name: get_members
+  description: Get members of a dimension (optionally children of a parent) with aliases.
+  input_schema:
+    type: object
+    required:
+    - application
+    - database
+    - dimension
+    properties:
+      application:
+        type: string
+      database:
+        type: string
+      dimension:
+        type: string
+      parent:
+        type: string
+- name: execute_mdx_query
+  description: Execute an MDX query against a cube and return a grid of data values.
+  input_schema:
+    type: object
+    required:
+    - application
+    - database
+    - query
+    properties:
+      application:
+        type: string
+      database:
+        type: string
+      query:
+        type: string
+intents:
+  list_applications: list_applications
+  list_databases: list_databases
+  get_dimensions: get_dimensions
+  get_members: get_members
+  data_query: execute_mdx_query
+dimensions:
+- name: Year
+  type: time
+  members:
+  - name: Year
+  - name: Qtr1
+    parent: Year
+    alias: Quarter 1
+  - name: Qtr2
+    parent: Year
+    alias: Quarter 2
+  - name: Qtr3
+    parent: Year
+    alias: Quarter 3
+  - name: Qtr4
+    parent: Year
+    alias: Quarter 4
+  - name: Jan
+    parent: Qtr1
+    alias: January
+  - name: Feb
+    parent: Qtr1
+    alias: February
+  - name: Mar
+    parent: Qtr1
+    alias: March
+- name: Measures
+  type: accounts
+  members:
+  - name: Measures
+  - name: Profit
+    parent: Measures
+  - name: Margin
+    parent: Profit
+  - name: Sales
+    parent: Margin
+    alias: Revenue
+  - name: COGS
+    parent: Margin
+    alias: Cost of Goods Sold
+  - name: Total Expenses
+    parent: Profit
+  - name: Marketing
+    parent: Total Expenses
+- name: Product
+  type: regular
+  members:
+  - name: Product
+    alias: All Products
+  - name: '100'
+    parent: Product
+    alias: Colas
+  - name: '200'
+    parent: Product
+    alias: Root Beer
+  - name: '300'
+    parent: Product
+    alias: Cream Soda
+  - name: '400'
+    parent: Product
+    alias: Fruit Soda
+  - name: 100-10
+    parent: '100'
+    alias: Cola
+  - name: 100-20
+    parent: '100'
+    alias: Diet Cola
+- name: Market
+  type: regular
+  members:
+  - name: Market
+    alias: All Markets
+  - name: East
+    parent: Market
+  - name: West
+    parent: Market
+  - name: South
+    parent: Market
+  - name: Central
+    parent: Market
+  - name: New York
+    parent: East
+  - name: California
+    parent: West
+  - name: Texas
+    parent: South
+- name: Scenario
+  type: regular
+  members:
+  - name: Scenario
+  - name: Actual
+    parent: Scenario
+  - name: Budget
+    parent: Scenario
+  - name: Variance
+    parent: Scenario
+glossary:
+  revenue: Sales
+  cost of sales: COGS
+  cola: 100-10
+  plan: Budget
+  forecast: Budget
+defaults:
+  Scenario: Actual
+examples:
+- question: Revenue for East by quarter
+  intent: data_query
+- question: Show the children of Colas
+  intent: get_members

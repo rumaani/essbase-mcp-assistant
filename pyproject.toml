@@ -1,0 +1,29 @@
+[project]
+name = "essbase-mcp-assistant"
+version = "0.1.0"
+description = "Authenticate to Oracle Essbase 26ai MCP, understand natural-language questions, and call the right tools using a curated context file."
+readme = "README.md"
+license = { text = "MIT" }
+requires-python = ">=3.11"
+dependencies = ["httpx>=0.27", "pyyaml>=6.0"]
+
+[project.optional-dependencies]
+mock = ["fastapi>=0.110", "uvicorn>=0.29"]
+dev = ["fastapi>=0.110", "uvicorn>=0.29", "pytest>=8", "ruff>=0.5"]
+
+[project.scripts]
+emcp = "essbase_mcp.cli:main"
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 100

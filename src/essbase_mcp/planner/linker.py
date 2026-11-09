@@ -23,6 +23,8 @@ class MemberIndex:
         self.top = {d["name"]: next((m["name"] for m in d["members"] if not m.get("parent")),
                                     d["name"]) for d in ctx.get("dimensions", [])}
         self._idx: dict[str, tuple[str, str, str]] = {}
+        self.parents = {m.get("parent") for d in ctx.get("dimensions", [])
+                        for m in d.get("members", []) if m.get("parent")}
         member_dim = {}
         for d in ctx.get("dimensions", []):
             for m in d.get("members", []):
@@ -34,17 +36,27 @@ class MemberIndex:
             if member in member_dim:
                 self._idx[term.lower()] = (member_dim[member], member, "glossary")
 
-    def link(self, text: str) -> tuple[list[Entity], list[str]]:
-        """Return (entities, group_by_dimensions). Longest match wins."""
+    def link(self, text: str) -> tuple[list[Entity], list[str], dict[str, str]]:
+        """Return (entities, group_by_dimensions, group_parent). Longest match wins.
+
+        "by <dimension>" groups by the dimension's top-level children; "by <member or glossary
+        term>" groups by that member's children (e.g. glossary quarter -> Year, "by East").
+        """
         tokens = TOKEN.findall(text)
         low = [t.lower().rstrip(".") for t in tokens]
-        entities, group_by, i = [], [], 0
+        entities, group_by, group_parent, i = [], [], {}, 0
         while i < len(tokens):
-            # "by <dimension>" / "per <dimension>" / "for each <dimension>"
             if low[i] in ("by", "per", "each") and i + 1 < len(tokens):
-                dim = self.dimensions.get(low[i + 1].rstrip("s")) or self.dimensions.get(low[i + 1])
+                nxt = low[i + 1]
+                dim = self.dimensions.get(nxt) or self.dimensions.get(nxt.rstrip("s"))
+                hit = self._idx.get(nxt) or self._idx.get(nxt.rstrip("s"))
                 if dim:
                     group_by.append(dim)
+                    i += 2
+                    continue
+                if hit and hit[1] in self.parents:
+                    group_by.append(hit[0])
+                    group_parent[hit[0]] = hit[1]
                     i += 2
                     continue
             for n in range(min(MAX_NGRAM, len(tokens) - i), 0, -1):
@@ -56,4 +68,4 @@ class MemberIndex:
                     break
             else:
                 i += 1
-        return entities, group_by
+        return entities, group_by, group_parent

@@ -15,12 +15,27 @@ SELECT {[Sales],[COGS]} ON COLUMNS, NON EMPTY [Market].Children ON ROWS
 FROM [Sample].[Basic] WHERE ([100],[Qtr1],[Actual])
 ```
 
+![Ask tab](docs/img/ask.png)
+
+## Try it in 2 minutes (no Essbase needed)
+```bash
+python -m venv .venv && source .venv/bin/activate    # Windows: .venv\Scripts\activate
+pip install -e ".[dev]"
+emcp web --demo                                      # open http://localhost:8000
+```
+`--demo` runs a mock identity domain and Essbase MCP server (Sample.Basic) inside the app.
+The **Ask** tab shows how each question was understood (recognized members, intent, tool, MDX)
+next to the result. **Context** lets you rebuild the context file and edit the business glossary.
+**Connection** shows the endpoint, profile and token status. Secrets never reach the browser.
+
+![Context tab](docs/img/context.png)
+
 ## Why this design
 - **Works without an LLM gateway.** Deterministic rules plus the context file handle common questions. An LLM can only *suggest* an intent; it can't invent members or tools.
 - **Doesn't hard-code Oracle's tool names.** Tools are discovered via `tools/list` and mapped to intents in the context file, so a catalog change means rebuilding the context, not editing code.
 - **Can be developed without a live 26ai server.** A bundled mock identity domain and Essbase MCP server (Sample.Basic) run everything locally.
 
-## Quick start
+## Command line
 ```bash
 python -m venv .venv && source .venv/bin/activate
 pip install -e ".[dev]"
@@ -47,6 +62,7 @@ src/essbase_mcp/
   planner/    entity linker, intent rules, MDX builder, plan validation
   llm/        optional OpenAI-compatible intent hint
   mock/       mock identity domain + Essbase MCP (placeholder tool catalog)
+  web/        FastAPI backend-for-frontend + single-page UI (no Node build)
 contexts/     generated + curated context files
 docs/         ARCHITECTURE.md, CONTEXT_FILE.md, ROADMAP.md
 ```

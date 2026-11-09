@@ -10,6 +10,7 @@ Run:  python -m essbase_mcp.mock.server   (port 9100)
 from __future__ import annotations
 
 import json
+import re
 import secrets
 import time
 import uuid
@@ -102,6 +103,26 @@ def _fake_value(*members: str) -> float:
     return float(sum(ord(c) for m in members for c in m) % 9000 + 1000)
 
 
+def _members(set_expr: str) -> list[str]:
+    """Resolve '{[a], [b]}' or '[X].Children' against the mock outline."""
+    set_expr = set_expr.strip()
+    if set_expr.endswith(".Children"):
+        parent = set_expr[: -len(".Children")].strip("[] ")
+        return [n for d in OUTLINE.values() for n, p, _ in d["members"] if p == parent]
+    return [m.strip(" []") for m in set_expr.strip("{} ").split(",") if m.strip(" []")]
+
+
+def _run_mdx(q: str) -> dict:
+    m = re.search(r"SELECT\s+(.+?)\s+ON COLUMNS(?:,\s*(?:NON EMPTY\s+)?(.+?)\s+ON ROWS)?\s+FROM",
+                  q, re.IGNORECASE | re.DOTALL)
+    if not m:
+        raise ValueError("MDX syntax error (mock parser)")
+    cols = _members(m.group(1))
+    rows = _members(m.group(2)) if m.group(2) else ["(slice)"]
+    return {"query": q, "columns": cols,
+            "rows": [{"member": r, "values": [_fake_value(r, c, q) for c in cols]} for r in rows]}
+
+
 def _call(name: str, args: dict, profile: str) -> dict:
     tool = next((t for t in TOOLS if t["name"] == name), None)
     if not tool:
@@ -122,10 +143,7 @@ def _call(name: str, args: dict, profile: str) -> dict:
         return _text({"members": [{"name": n, "parent": p, "alias": a} for n, p, a in rows]})
     if name == "execute_mdx_query":
         q = args["query"]
-        cols = q.split("ON COLUMNS")[0].split("SELECT", 1)[-1]
-        names = [s.strip(" []{}") for s in cols.replace("},", ",").split(",") if s.strip(" []{}")]
-        return _text({"query": q, "columns": names,
-                      "rows": [{"member": "(slice)", "values": [_fake_value(n, q) for n in names]}]})
+        return _text(_run_mdx(q))
     return _text({"status": "submitted", "jobId": str(uuid.uuid4())})
 
 

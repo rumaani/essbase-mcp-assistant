@@ -1,0 +1,416 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Essbase MCP Assistant</title>
+<style>
+  :root {
+    --bg: #f6f7f9; --panel: #ffffff; --ink: #1d2433; --muted: #5d6779; --line: #e3e6ec;
+    --accent: #2f5bd3; --accent-soft: #e8eefc; --ok: #1f8a4c; --ok-soft: #e6f4ec;
+    --warn: #a56300; --warn-soft: #fdf3e2; --bad: #b42318; --bad-soft: #fdecea;
+    --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; font: 14px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+         background: var(--bg); color: var(--ink); }
+  header { display: flex; align-items: center; gap: 16px; padding: 12px 24px;
+           background: var(--panel); border-bottom: 1px solid var(--line); }
+  header h1 { font-size: 16px; margin: 0; font-weight: 650; }
+  header .cube { color: var(--muted); }
+  nav { display: flex; gap: 4px; margin-left: 24px; }
+  nav button { border: 0; background: none; padding: 8px 14px; border-radius: 6px; cursor: pointer;
+               font: inherit; color: var(--muted); }
+  nav button.active { background: var(--accent-soft); color: var(--accent); font-weight: 600; }
+  .spacer { flex: 1; }
+  .pill { display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px; border-radius: 999px;
+          font-size: 12px; background: var(--line); color: var(--muted); white-space: nowrap; }
+  .pill.ok { background: var(--ok-soft); color: var(--ok); }
+  .pill.bad { background: var(--bad-soft); color: var(--bad); }
+  .pill.warn { background: var(--warn-soft); color: var(--warn); }
+  .dot { width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
+  main { max-width: 1180px; margin: 0 auto; padding: 24px; }
+  .tab { display: none; } .tab.active { display: block; }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 18px 20px;
+          margin-bottom: 16px; }
+  .card h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted);
+             margin: 0 0 12px; font-weight: 600; }
+  .ask { display: flex; gap: 8px; }
+  .ask input { flex: 1; font: inherit; font-size: 15px; padding: 11px 14px; border: 1px solid var(--line);
+               border-radius: 8px; outline: none; }
+  .ask input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+  button.primary, button.secondary { font: inherit; border-radius: 8px; padding: 9px 16px; cursor: pointer;
+               border: 1px solid var(--accent); }
+  button.primary { background: var(--accent); color: #fff; font-weight: 600; }
+  button.secondary { background: var(--panel); color: var(--accent); }
+  button:disabled { opacity: .55; cursor: default; }
+  .opts { display: flex; align-items: center; gap: 16px; margin-top: 10px; color: var(--muted); font-size: 13px; }
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 12px; }
+  .chip { border: 1px solid var(--line); background: var(--bg); border-radius: 999px; padding: 4px 12px;
+          cursor: pointer; font: inherit; font-size: 13px; color: var(--ink); }
+  .chip:hover { border-color: var(--accent); color: var(--accent); }
+  .grid2 { display: grid; grid-template-columns: 380px 1fr; gap: 16px; align-items: start; }
+  @media (max-width: 900px) { .grid2 { grid-template-columns: 1fr; } }
+  dl { display: grid; grid-template-columns: 110px 1fr; gap: 8px 12px; margin: 0; }
+  dt { color: var(--muted); } dd { margin: 0; min-width: 0; }
+  .ent { display: inline-block; margin: 0 6px 6px 0; padding: 3px 8px;
+         border-radius: 6px; background: var(--accent-soft); font-size: 13px; }
+  .ent small { color: var(--muted); }
+  code, pre { font-family: var(--mono); font-size: 12.5px; }
+  pre { background: #0f1729; color: #dbe4ff; padding: 12px 14px; border-radius: 8px; margin: 0;
+        white-space: pre-wrap; word-break: break-word; }
+  .note { padding: 10px 12px; border-radius: 8px; margin-top: 12px; font-size: 13px; }
+  .note.warn { background: var(--warn-soft); color: var(--warn); }
+  .note.bad { background: var(--bad-soft); color: var(--bad); }
+  .note.info { background: var(--accent-soft); color: var(--accent); }
+  table { border-collapse: collapse; width: 100%; }
+  th, td { padding: 8px 10px; border-bottom: 1px solid var(--line); text-align: left; }
+  th { font-size: 12px; color: var(--muted); font-weight: 600; background: var(--bg); }
+  td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
+  .empty { color: var(--muted); text-align: center; padding: 40px 0; }
+  .history { list-style: none; padding: 0; margin: 0; }
+  .history li { padding: 6px 0; border-bottom: 1px solid var(--line); cursor: pointer; font-size: 13px;
+                display: flex; justify-content: space-between; gap: 8px; }
+  .history li:hover { color: var(--accent); }
+  .row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  .row input { font: inherit; padding: 7px 10px; border: 1px solid var(--line); border-radius: 6px; }
+  details { border-bottom: 1px solid var(--line); padding: 8px 0; }
+  summary { cursor: pointer; font-weight: 600; }
+  summary span { font-weight: 400; color: var(--muted); margin-left: 6px; }
+  .members { columns: 3; column-gap: 24px; margin: 8px 0 4px 16px; font-size: 13px; }
+  .members div { break-inside: avoid; padding: 1px 0; }
+  .members small { color: var(--muted); }
+  .gl td input { width: 100%; font: inherit; padding: 5px 8px; border: 1px solid var(--line); border-radius: 6px; }
+  .link { background: none; border: 0; color: var(--bad); cursor: pointer; font: inherit; }
+  .muted { color: var(--muted); }
+  .bar { display: inline-block; height: 8px; border-radius: 4px; background: var(--accent); opacity: .25;
+         vertical-align: middle; margin-left: 8px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Essbase MCP Assistant</h1>
+  <span class="cube" id="cubeLabel"></span>
+  <nav>
+    <button data-tab="ask" class="active">Ask</button>
+    <button data-tab="context">Context</button>
+    <button data-tab="connection">Connection</button>
+  </nav>
+  <div class="spacer"></div>
+  <span id="demoPill" class="pill warn" hidden>Demo · mock server</span>
+  <span id="connPill" class="pill"><span class="dot"></span><span>Checking…</span></span>
+</header>
+
+<main>
+  <!-- ASK -->
+  <section id="tab-ask" class="tab active">
+    <div class="card">
+      <form class="ask" id="askForm">
+        <input id="q" autocomplete="off" placeholder="Ask about the cube, e.g. “revenue for Colas by market in Qtr1”">
+        <button class="primary" id="askBtn">Ask</button>
+      </form>
+      <div class="opts">
+        <label><input type="checkbox" id="planOnly"> Plan only (don’t call Essbase)</label>
+      </div>
+      <div class="chips" id="examples"></div>
+    </div>
+    <div class="grid2">
+      <div>
+        <div class="card">
+          <h2>How it was understood</h2>
+          <div id="plan"><div class="empty">Ask a question to see the plan.</div></div>
+        </div>
+        <div class="card">
+          <h2>Recent</h2>
+          <ul class="history" id="history"><li class="muted">Nothing yet.</li></ul>
+        </div>
+      </div>
+      <div class="card">
+        <h2>Result</h2>
+        <div id="result"><div class="empty">Results appear here.</div></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- CONTEXT -->
+  <section id="tab-context" class="tab">
+    <div class="card">
+      <h2>Build / refresh context</h2>
+      <form class="row" id="buildForm">
+        <label>Application <input id="app" value="Sample" size="12"></label>
+        <label>Database <input id="db" value="Basic" size="12"></label>
+        <button class="primary" id="buildBtn">Build from server</button>
+        <span class="muted" id="builtAt"></span>
+      </form>
+      <div class="note info">Building reads the tool catalog and cube outline from the server.
+        Your glossary, defaults, intent overrides and examples are kept.</div>
+    </div>
+    <div class="grid2">
+      <div>
+        <div class="card">
+          <h2>Glossary <span class="muted" style="text-transform:none">business term → member</span></h2>
+          <table class="gl"><thead><tr><th>Term</th><th>Member</th><th></th></tr></thead>
+            <tbody id="glossary"></tbody></table>
+          <div class="row" style="margin-top:10px">
+            <button class="secondary" id="addTerm" type="button">+ Add term</button>
+            <button class="primary" id="saveGlossary" type="button">Save glossary</button>
+          </div>
+          <div id="glossaryMsg"></div>
+        </div>
+        <div class="card">
+          <h2>Intent → tool</h2>
+          <table><tbody id="intents"></tbody></table>
+        </div>
+      </div>
+      <div>
+        <div class="card">
+          <h2>Dimensions</h2>
+          <div id="dims"><div class="empty">No context yet. Build one above.</div></div>
+        </div>
+        <div class="card">
+          <h2>Tools discovered</h2>
+          <table><thead><tr><th>Tool</th><th>Description</th></tr></thead><tbody id="tools"></tbody></table>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- CONNECTION -->
+  <section id="tab-connection" class="tab">
+    <div class="card">
+      <h2>Connection</h2>
+      <dl id="connInfo"></dl>
+      <div class="row" style="margin-top:16px">
+        <button class="primary" id="testBtn">Test connection</button>
+        <span id="testMsg"></span>
+      </div>
+      <div class="note info">Settings come from <code>.env</code> on the server. Secrets and tokens never reach
+        the browser. Edit <code>.env</code> and restart <code>emcp web</code> to point at a real Essbase 26ai.</div>
+    </div>
+  </section>
+</main>
+
+<script>
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) =>
+  ({"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"}[c]));
+let ctx = null, hist = [];
+
+async function api(path, opts = {}) {
+  const res = await fetch(path, {headers: {"Content-Type": "application/json"}, ...opts});
+  const body = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(body.detail || res.statusText);
+  return body;
+}
+
+document.querySelectorAll("nav button").forEach((b) => b.onclick = () => {
+  document.querySelectorAll("nav button").forEach((x) => x.classList.toggle("active", x === b));
+  document.querySelectorAll(".tab").forEach((t) => t.classList.toggle("active", t.id === "tab-" + b.dataset.tab));
+});
+
+// ---------- status / connection ----------
+async function loadStatus() {
+  const s = await api("/api/status");
+  $("demoPill").hidden = !s.demo;
+  const pill = $("connPill");
+  pill.className = "pill " + (s.connected ? "ok" : "bad");
+  pill.lastChild.textContent = s.connected ? `Connected · ${s.profile}` : "Not connected";
+  const rows = [
+    ["MCP endpoint", `<code>${esc(s.mcp_url)}</code>`],
+    ["Profile", esc(s.profile)],
+    ["Auth", esc(s.auth_mode) + (s.client_id ? ` · client <code>${esc(s.client_id)}</code>` : "")],
+    ["Token URL", s.token_url ? `<code>${esc(s.token_url)}</code>` : "—"],
+    ["Token", s.token_expires_in ? `valid, expires in ${Math.round(s.token_expires_in / 60)} min` : "not issued yet"],
+    ["Server", s.server ? `${esc(s.server.name)} ${esc(s.server.version || "")}` : "—"],
+    ["Query help", s.llm_provider === "none" ? "rules + context file (no LLM)" : esc(s.llm_provider)],
+    ["Context file", `<code>${esc(s.context_file)}</code>`],
+  ];
+  if (s.error) rows.push(["Last error", `<span style="color:var(--bad)">${esc(s.error)}</span>`]);
+  $("connInfo").innerHTML = rows.map(([k, v]) => `<dt>${k}</dt><dd>${v}</dd>`).join("");
+  return s;
+}
+
+$("testBtn").onclick = async () => {
+  $("testBtn").disabled = true; $("testMsg").textContent = "Testing…";
+  try {
+    const r = await api("/api/connect", {method: "POST"});
+    $("testMsg").innerHTML = r.ok
+      ? `<span class="pill ok">OK · ${esc(r.server.name)} · ${r.tool_count} tools</span>`
+      : `<span class="pill bad">${esc(r.error)}</span>`;
+  } catch (e) { $("testMsg").innerHTML = `<span class="pill bad">${esc(e.message)}</span>`; }
+  $("testBtn").disabled = false; loadStatus();
+};
+
+// ---------- context ----------
+function renderContext() {
+  if (!ctx) { $("cubeLabel").textContent = "· no context"; renderExamples(); return; }
+  const c = ctx.cube;
+  $("cubeLabel").textContent = `· ${c.application}.${c.database}`;
+  $("app").value = c.application; $("db").value = c.database;
+  $("builtAt").textContent = ctx.generated_at ? "Last built " + new Date(ctx.generated_at).toLocaleString() : "";
+  $("tools").innerHTML = ctx.tools.map((t) =>
+    `<tr><td><code>${esc(t.name)}</code></td><td class="muted">${esc(t.description)}</td></tr>`).join("");
+  const allIntents = ["list_applications", "list_databases", "get_dimensions", "get_members", "data_query", "calculation"];
+  $("intents").innerHTML = allIntents.map((i) => {
+    const t = ctx.intents[i];
+    return `<tr><td>${i}</td><td>${t ? `<code>${esc(t)}</code>` : '<span class="muted">not available</span>'}</td></tr>`;
+  }).join("");
+  $("dims").innerHTML = ctx.dimensions.map((d) => `
+    <details><summary>${esc(d.name)}<span>${esc(d.type)} · ${d.members.length} members</span></summary>
+      <div class="members">${d.members.map((m) =>
+        `<div>${esc(m.name)}${m.alias ? ` <small>(${esc(m.alias)})</small>` : ""}</div>`).join("")}</div>
+    </details>`).join("");
+  renderGlossary(ctx.glossary || {});
+  renderExamples();
+}
+
+function memberOptions() {
+  return ctx.dimensions.flatMap((d) => d.members.map((m) => m.name));
+}
+
+function renderGlossary(g) {
+  const opts = memberOptions();
+  $("glossary").innerHTML = Object.entries(g).map(([k, v]) => glossaryRow(k, v)).join("")
+    || `<tr class="placeholder"><td colspan="3" class="muted">No terms yet. Add your team’s vocabulary.</td></tr>`;
+  if (!$("memberList")) {
+    const dl = document.createElement("datalist"); dl.id = "memberList"; document.body.appendChild(dl);
+  }
+  $("memberList").innerHTML = opts.map((o) => `<option value="${esc(o)}">`).join("");
+}
+const glossaryRow = (k = "", v = "") => `<tr>
+  <td><input class="term" value="${esc(k)}" placeholder="e.g. revenue"></td>
+  <td><input class="member" list="memberList" value="${esc(v)}" placeholder="e.g. Sales"></td>
+  <td><button class="link" type="button" onclick="this.closest('tr').remove()">✕</button></td></tr>`;
+
+$("addTerm").onclick = () => {
+  document.querySelector("#glossary .placeholder")?.remove();
+  $("glossary").insertAdjacentHTML("beforeend", glossaryRow());
+};
+$("saveGlossary").onclick = async () => {
+  const g = {};
+  document.querySelectorAll("#glossary tr").forEach((tr) => {
+    const t = tr.querySelector(".term")?.value.trim(), m = tr.querySelector(".member")?.value.trim();
+    if (t && m) g[t] = m;
+  });
+  try {
+    ctx.glossary = await api("/api/context/glossary", {method: "PUT", body: JSON.stringify({glossary: g})});
+    $("glossaryMsg").innerHTML = `<div class="note info">Saved ${Object.keys(g).length} terms.</div>`;
+    renderGlossary(ctx.glossary);
+  } catch (e) { $("glossaryMsg").innerHTML = `<div class="note bad">${esc(e.message)}</div>`; }
+};
+
+$("buildForm").onsubmit = async (e) => {
+  e.preventDefault(); $("buildBtn").disabled = true; $("buildBtn").textContent = "Building…";
+  try {
+    ctx = await api("/api/context/build", {method: "POST",
+      body: JSON.stringify({application: $("app").value, database: $("db").value})});
+    renderContext();
+  } catch (err) { alert(err.message); }
+  $("buildBtn").disabled = false; $("buildBtn").textContent = "Build from server"; loadStatus();
+};
+
+// ---------- ask ----------
+const DEFAULT_EXAMPLES = [
+  "Sales and Profit for New York by quarter",
+  "revenue and cost of sales for Colas by market in Qtr1",
+  "Profit by product in Budget",
+  "show the children of East",
+  "what dimensions are in this cube?",
+];
+function renderExamples() {
+  const fromCtx = (ctx?.examples || []).map((e) => e.question);
+  const list = [...new Set([...fromCtx, ...DEFAULT_EXAMPLES])].slice(0, 7);
+  $("examples").innerHTML = list.map((q) => `<button class="chip" type="button">${esc(q)}</button>`).join("");
+  $("examples").querySelectorAll(".chip").forEach((b) => b.onclick = () => { $("q").value = b.textContent; ask(); });
+}
+
+$("askForm").onsubmit = (e) => { e.preventDefault(); ask(); };
+
+async function ask() {
+  const question = $("q").value.trim();
+  if (!question) return;
+  $("askBtn").disabled = true; $("askBtn").textContent = "Asking…";
+  try {
+    const r = await api("/api/ask", {method: "POST",
+      body: JSON.stringify({question, execute: !$("planOnly").checked})});
+    renderPlan(r); renderResult(r);
+    hist = [{question, ok: r.ok}, ...hist.filter((h) => h.question !== question)].slice(0, 8);
+    $("history").innerHTML = hist.map((h) =>
+      `<li><span>${esc(h.question)}</span><span class="pill ${h.ok ? "ok" : "warn"}">${h.ok ? "ok" : "?"}</span></li>`).join("");
+    $("history").querySelectorAll("li").forEach((li, i) => li.onclick = () => { $("q").value = hist[i].question; ask(); });
+  } catch (e) {
+    $("plan").innerHTML = `<div class="note bad">${esc(e.message)}</div>`;
+    $("result").innerHTML = `<div class="empty">—</div>`;
+  }
+  $("askBtn").disabled = false; $("askBtn").textContent = "Ask";
+}
+
+function renderPlan(r) {
+  const p = r.plan;
+  const conf = Math.round(p.confidence * 100);
+  let html = `<dl>
+    <dt>Intent</dt><dd><span class="pill ${p.intent === "unknown" ? "bad" : "ok"}">${esc(p.intent)}</span>
+      <span class="muted">${conf}% confidence</span></dd>
+    <dt>Recognized</dt><dd>${p.entities.length ? p.entities.map((e) =>
+      `<span class="ent">${esc(e.text)} <small>→ ${esc(e.dimension)}:</small><b>${esc(e.member)}</b>
+       <small>(${esc(e.via)})</small></span>`).join("") : '<span class="muted">nothing</span>'}</dd>
+    <dt>Tool</dt><dd>${p.tool ? `<code>${esc(p.tool)}</code>` : '<span class="muted">—</span>'}</dd>
+    <dt>Time</dt><dd class="muted">${r.elapsed_ms} ms</dd>
+  </dl>`;
+  if (p.arguments?.query) html += `<div style="margin-top:12px"><pre>${esc(formatMdx(p.arguments.query))}</pre></div>`;
+  else if (p.tool) html += `<div style="margin-top:12px"><pre>${esc(JSON.stringify(p.arguments, null, 2))}</pre></div>`;
+  p.warnings.forEach((w) => html += `<div class="note warn">${esc(w)}</div>`);
+  if (p.clarification) html += `<div class="note warn">${esc(p.clarification)}</div>`;
+  $("plan").innerHTML = html;
+}
+const formatMdx = (q) => q.replace(/ ON COLUMNS, /, " ON COLUMNS,\n  ").replace(/ FROM /, "\nFROM ").replace(/ WHERE /, "\nWHERE ")
+  .replace(/^SELECT /, "SELECT\n  ");
+
+function renderResult(r) {
+  const el = $("result");
+  if (r.error) { el.innerHTML = `<div class="note bad">${esc(r.error)}</div>`; return; }
+  if (!r.ok) { el.innerHTML = `<div class="empty">Refine the question. See the note on the left.</div>`; return; }
+  const d = r.result;
+  if (d == null) { el.innerHTML = `<div class="empty">Plan only. Untick “Plan only” to run it.</div>`; return; }
+  if (d.columns && d.rows) {
+    const max = Math.max(...d.rows.flatMap((x) => x.values).map(Math.abs), 1);
+    el.innerHTML = `<table><thead><tr><th></th>${d.columns.map((c) => `<th class="num">${esc(c)}</th>`).join("")}</tr></thead>
+      <tbody>${d.rows.map((row) => `<tr><td>${esc(row.member)}</td>${row.values.map((v) =>
+        `<td class="num">${v.toLocaleString(undefined, {maximumFractionDigits: 2})}
+         <span class="bar" style="width:${Math.round(Math.abs(v) / max * 60)}px"></span></td>`).join("")}</tr>`).join("")}</tbody></table>
+      <div class="row" style="margin-top:12px"><button class="secondary" type="button" id="csvBtn">Download CSV</button></div>`;
+    $("csvBtn").onclick = () => downloadCsv(d);
+    return;
+  }
+  const list = d.members || d.dimensions || d.applications || d.databases;
+  if (Array.isArray(list)) {
+    const cols = typeof list[0] === "object" ? Object.keys(list[0]) : ["name"];
+    el.innerHTML = `<table><thead><tr>${cols.map((c) => `<th>${esc(c)}</th>`).join("")}</tr></thead><tbody>${
+      list.map((x) => `<tr>${cols.map((c) => `<td>${esc(typeof x === "object" ? (x[c] ?? "") : x)}</td>`).join("")}</tr>`).join("")
+    }</tbody></table>`;
+    return;
+  }
+  el.innerHTML = `<pre>${esc(JSON.stringify(d, null, 2))}</pre>`;
+}
+
+function downloadCsv(d) {
+  const lines = [["", ...d.columns], ...d.rows.map((r) => [r.member, ...r.values])]
+    .map((r) => r.map((v) => `"${String(v).replace(/"/g, '""')}"`).join(","));
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(new Blob([lines.join("\n")], {type: "text/csv"}));
+  a.download = "essbase-result.csv"; a.click();
+}
+
+// ---------- boot ----------
+(async () => {
+  const s = await loadStatus();
+  if (s.has_context) { ctx = await api("/api/context"); }
+  renderContext();
+  if (!ctx) {
+    $("plan").innerHTML = `<div class="note info">No context file yet. Open the <b>Context</b> tab and click
+      <b>Build from server</b>.</div>`;
+  }
+})();
+</script>
+</body>
+</html>

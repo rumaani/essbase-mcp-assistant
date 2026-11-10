@@ -17,7 +17,8 @@ INTENT_KEYWORDS: dict[str, tuple[list[str], list[str]]] = {
     "list_applications": (["application"], ["database", "cube", "dimension", "member"]),
     "list_databases": (["database", "cube"], ["dimension", "member", "mdx", "query", "calc"]),
     "get_dimensions": (["dimension"], ["member"]),
-    "get_members": (["member"], ["mdx"]),
+    "get_members": (["member"], ["mdx", "search", "find"]),
+    "search_members": (["search", "find"], ["mdx", "calc"]),
     "data_query": (["mdx", "query", "grid", "report"], ["calc"]),
     "calculation": (["calc"], []),
 }
@@ -39,8 +40,12 @@ def suggest_intents(tools: list[dict]) -> dict[str, str]:
     return mapping
 
 
-def build(client: MCPClient, application: str, database: str) -> dict:
-    server = client.initialize().get("serverInfo", {})
+def build(client: MCPClient, application: str, database: str,
+          max_members: int = 5000) -> dict:
+    """Read one cube. Dimensions larger than max_members are cached top-down and marked
+    `truncated`; members beyond the cache are found at question time via search_members."""
+    client.ensure_initialized()
+    server = client.server_info or {}
     tools = client.list_tools()
     by_name = {t["name"]: t for t in tools}
     intents = suggest_intents(tools)
@@ -56,12 +61,17 @@ def build(client: MCPClient, application: str, database: str) -> dict:
             if "get_members" in intents:
                 members = call("get_members", application=application, database=database,
                                dimension=d["name"]).get("members", [])
-            dimensions.append({"name": d["name"], "type": d.get("type", "regular"),
-                               "members": [{k: v for k, v in m.items() if v is not None}
-                                           for m in members]})
+            entry = {"name": d["name"], "type": d.get("type", "regular"),
+                     "members": [{k: v for k, v in m.items() if v is not None}
+                                 for m in members[:max_members]]}
+            if len(members) > max_members:
+                entry["truncated"] = True
+                entry["total_members"] = len(members)
+            dimensions.append(entry)
 
     return {
         "version": 1,
+        "revision": 1,
         "generated_at": dt.datetime.now(dt.UTC).isoformat(timespec="seconds"),
         "source": {"server": server.get("name"), "url": client.url, "profile": client.profile},
         "cube": {"application": application, "database": database},

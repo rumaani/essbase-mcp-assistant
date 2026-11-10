@@ -24,19 +24,21 @@ from essbase_mcp.context import builder, store
 from essbase_mcp.context.args import fit
 from essbase_mcp.llm import base as llm
 from essbase_mcp.mcp.client import MCPClient
+from essbase_mcp.planner.executor import Executor
 from essbase_mcp.planner.planner import Planner
 
 
 def _client(s: Settings) -> MCPClient:
     c = runtime.connect(s)
-    c.initialize()
+    c.ensure_initialized()
     return c
 
 
 def cmd_build(a, s: Settings) -> int:
     out = a.out or store.path_for(s.context_dir, a.app, a.db)
     existing = store.load(out) if Path(out).exists() else None
-    ctx = store.merge(builder.build(runtime.connect(s), a.app, a.db), existing)
+    ctx = store.merge(builder.build(runtime.connect(s), a.app, a.db,
+                                    s.max_members_per_dimension), existing)
     store.save(ctx, out)
     if not a.out:
         settings_store.save(dataclasses.replace(Settings.load(), active_cube=f"{a.app}.{a.db}"))
@@ -71,16 +73,24 @@ def cmd_apps(a, s: Settings) -> int:
 
 def cmd_ask(a, s: Settings) -> int:
     ctx = store.load(a.context or s.context_file)
-    plan = Planner(ctx, llm.from_settings(s)).plan(a.question)
-    print(json.dumps(plan.to_dict(), indent=2))
-    if not plan.ok or a.dry_run:
-        return 0 if plan.ok else 2
-    if plan.intent == "calculation" and not a.yes:
-        print("Refusing to run a calculation without --yes.", file=sys.stderr)
-        return 3
-    result = _client(s).call_tool(plan.tool, plan.arguments)
-    print(json.dumps(MCPClient.tool_payload(result), indent=2))
-    return 1 if result.get("isError") else 0
+    planner = Planner(ctx, llm.from_settings(s))
+    if planner.plan(a.question).intent == "calculation" and not a.dry_run:
+        if not a.yes:
+            print("Refusing to run a calculation without --yes.", file=sys.stderr)
+            return 3
+        plan = planner.plan(a.question)
+        result = _client(s).call_tool(plan.tool, plan.arguments)
+        print(json.dumps(MCPClient.tool_payload(result), indent=2))
+        return 1 if result.get("isError") else 0
+    client = None if a.dry_run else runtime.connect(s)
+    out = Executor(planner, client).run(a.question, execute=not a.dry_run)
+    for i, st in enumerate(out.steps, 1):
+        print(f"step {i} [{st.status}] {st.purpose}" + (f": {st.summary}" if st.summary else ""))
+    print(json.dumps({"plan": out.plan.to_dict(), "error": out.error}, indent=2)
+          if a.dry_run or not out.plan.ok else json.dumps(out.result, indent=2))
+    if out.error:
+        print(out.error, file=sys.stderr)
+    return 0 if out.plan.ok and not out.error else 2
 
 
 def cmd_web(a, s: Settings) -> int:

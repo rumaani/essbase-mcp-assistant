@@ -18,6 +18,9 @@ MCPClient ── TokenProvider (OAuth 2.1 client credentials / static token)
 Essbase 26ai MCP (or mock)
 ```
 
+## Multi-step and concurrency
+See [CONCURRENCY.md](CONCURRENCY.md).
+
 ## Safety rails
 - Tools come from `tools/list` for the configured profile, so the server's own profile gating holds. A viewer never sees admin tools.
 - Calculations need `--yes`.

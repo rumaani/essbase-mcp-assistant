@@ -27,7 +27,7 @@ def test_csrf_header_required(settings):
     assert raw.post("/api/connect").status_code == 403
 
 
-def test_catalog_build_and_switch_cubes(web):
+def test_catalog_build_and_per_request_cube(web):
     cat = web.get("/api/catalog").json()
     cubes = [d["cube"] for a in cat["applications"] for d in a["databases"]]
     assert cubes == ["ASOSamp.Basic", "Sample.Basic"]
@@ -36,14 +36,13 @@ def test_catalog_build_and_switch_cubes(web):
     web.post("/api/context/build", json={"application": "Sample", "database": "Basic"})
     aso = web.post("/api/context/build", json={"application": "ASOSamp", "database": "Basic"}).json()
     assert {d["name"] for d in aso["dimensions"]} >= {"Geography", "Stores"}
-    assert web.get("/api/status").json()["active_cube"] == "ASOSamp.Basic"
+    assert web.get("/api/status").json()["default_cube"] == "Sample.Basic"  # first one loaded
     assert len(web.get("/api/contexts").json()["contexts"]) == 2
 
-    r = web.post("/api/ask", json={"question": "Units by geography"}).json()
+    # each request names its own cube; nobody switches the cube for anyone else
+    r = web.post("/api/ask", json={"question": "Units by geography", "cube": "ASOSamp.Basic"}).json()
     assert r["ok"] and [x["member"] for x in r["result"]["rows"]] == ["East", "West", "Central"]
-
-    web.post("/api/context/activate", json={"cube": "Sample.Basic"})
-    r = web.post("/api/ask", json={"question": "Sales by market"}).json()
+    r = web.post("/api/ask", json={"question": "Sales by market"}).json()  # default cube
     assert r["cube"] == "Sample.Basic" and r["ok"]
 
 
@@ -52,18 +51,35 @@ def test_curated_context_edits(web):
     bad = web.patch("/api/context", json={"glossary": {"revenue": "Nope"}})
     assert bad.status_code == 422
     assert web.patch("/api/context", json={"defaults": {"Scenario": "Sales"}}).status_code == 422
-    ok = web.patch("/api/context", json={
+    rev = web.get("/api/context").json()["revision"]
+    ok = web.patch("/api/context", json={"revision": rev,
         "glossary": {"revenue": "Sales", "coastal": ["New York", "California"]},
         "defaults": {"Scenario": "Actual"},
         "notes": "Fiscal year starts in January. 'Plan' means Budget.",
         "intents": {"data_query": "execute_mdx_query"}})
-    assert ok.status_code == 200
+    assert ok.status_code == 200 and ok.json()["revision"] == rev + 1
+    # a second editor still holding the old revision is refused instead of overwriting
+    stale = web.patch("/api/context", json={"revision": rev, "notes": "mine"})
+    assert stale.status_code == 409
     # rebuild keeps curated sections
     ctx = web.post("/api/context/build", json={"application": "Sample", "database": "Basic"}).json()
     assert ctx["notes"].startswith("Fiscal") and ctx["glossary"]["coastal"] == ["New York", "California"]
     mdx = web.post("/api/ask", json={"question": "revenue for coastal", "execute": False}
                    ).json()["plan"]["arguments"]["query"]
     assert "{[New York], [California]} ON ROWS" in mdx and "[Actual]" in mdx
+
+
+def test_context_without_revision_still_conflict_checked(web, settings):
+    from essbase_mcp.context import store
+    web.post("/api/context/build", json={"application": "Sample", "database": "Basic"})
+    path = store.path_for(settings.context_dir, "Sample", "Basic")
+    legacy = store.load(path)
+    legacy.pop("revision")
+    store.save(legacy, path)  # a file written before revisions existed
+    rev = web.get("/api/context").json()["revision"]
+    assert rev == 1
+    assert web.patch("/api/context", json={"revision": rev, "notes": "A"}).status_code == 200
+    assert web.patch("/api/context", json={"revision": rev, "notes": "B"}).status_code == 409
 
 
 def test_admin_settings_persist_and_encrypt(web, settings):

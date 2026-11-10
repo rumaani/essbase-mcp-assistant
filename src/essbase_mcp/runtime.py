@@ -7,7 +7,7 @@ import httpx
 
 from essbase_mcp.auth import providers
 from essbase_mcp.config import Settings
-from essbase_mcp.mcp.client import MCPClient
+from essbase_mcp.mcp.client import MCPClient, Metrics
 
 MOCK_BASE = "http://mock.local"
 
@@ -31,10 +31,15 @@ def http_client(s: Settings) -> httpx.Client:
         from essbase_mcp.mock import server as mock
 
         return TestClient(mock.app, base_url=MOCK_BASE)
-    return httpx.Client(timeout=60, verify=s.verify_tls)
+    # pool sized to the concurrency cap, so queued work waits in our queue, not in httpx
+    limits = httpx.Limits(max_connections=s.max_concurrent_calls + 5,
+                          max_keepalive_connections=s.max_concurrent_calls)
+    return httpx.Client(timeout=s.request_timeout_s, verify=s.verify_tls, limits=limits)
 
 
-def connect(s: Settings) -> MCPClient:
+def connect(s: Settings, metrics: Metrics | None = None) -> MCPClient:
     eff = effective(s)
     http = http_client(s)
-    return MCPClient(eff.mcp_url, eff.profile, providers.from_settings(eff, http), http)
+    return MCPClient(eff.mcp_url, eff.profile, providers.from_settings(eff, http), http,
+                     max_concurrent=s.max_concurrent_calls, queue_timeout=s.queue_timeout_s,
+                     metrics=metrics)

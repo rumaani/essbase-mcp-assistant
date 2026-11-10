@@ -56,7 +56,7 @@
   .btn:disabled { opacity: .5; cursor: default; }
   .x { background: none; border: 0; color: var(--muted); cursor: pointer; font-size: 16px; padding: 2px 6px; border-radius: 4px; }
   .x:hover { color: var(--bad); background: var(--bad-soft); }
-  input[type=text], input[type=password], input:not([type]), select, textarea {
+  input[type=text], input[type=password], input[type=number], input:not([type]), select, textarea {
     padding: 8px 10px; border: 1px solid var(--line); border-radius: 7px; background: #fff; width: 100%; }
   input:focus, select:focus, textarea:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
   textarea { min-height: 120px; resize: vertical; line-height: 1.55; }
@@ -97,6 +97,10 @@
   details.more summary::before { content: "▸ "; } details.more[open] summary::before { content: "▾ "; }
   dl { display: grid; grid-template-columns: 110px 1fr; gap: 6px 12px; margin: 12px 0; font-size: 13px; }
   dt { color: var(--muted); } dd { margin: 0; }
+  ol.steps { list-style: none; padding: 0; margin: 12px 0 0; border-left: 2px solid var(--line); }
+  ol.steps li { padding: 4px 0 10px 12px; position: relative; }
+  .sicon { width: 16px; display: inline-block; color: var(--ok); font-weight: 700; }
+  li.failed .sicon { color: var(--bad); } li.planned .sicon, li.skipped .sicon { color: var(--muted); }
   .vbar { display: inline-block; height: 6px; border-radius: 3px; background: var(--accent); opacity: .22; margin-left: 10px; vertical-align: middle; }
 
   /* ---------- context ---------- */
@@ -190,6 +194,7 @@
           <p>Read from Essbase. Refresh after outline changes; your edits below are kept.</p></div>
           <button class="btn ghost sm" id="rebuild">Refresh from Essbase</button></div>
         <div class="stats" id="stats"></div>
+        <div class="indent" id="partialNote"></div>
         <details class="more indent"><summary>Browse the outline</summary><div class="outline" id="dims"></div></details>
       </div>
 
@@ -286,6 +291,18 @@
           <label class="llm" for="llm_api_key">API key</label><input class="llm" id="llm_api_key" name="llm_api_key" type="password" autocomplete="new-password">
         </div>
       </div>
+      <div class="card">
+        <div class="step"><div class="stepnum" id="capNum">4</div><div><h3>Capacity <span class="tag">optional</span></h3>
+          <p>Everyone shares one connection to Essbase. These limits keep a busy hour from overloading it.</p></div></div>
+        <div class="form">
+          <label for="max_concurrent_calls">Parallel Essbase calls</label><input id="max_concurrent_calls" name="max_concurrent_calls" type="number" min="1" max="500">
+          <div class="hint">Calls beyond this wait in line. Raise it if your Essbase server has headroom.</div>
+          <label for="queue_timeout_s">Max wait in line (s)</label><input id="queue_timeout_s" name="queue_timeout_s" type="number" min="1" max="600">
+          <div class="hint">After this, the user sees “Essbase is busy, try again” instead of waiting forever.</div>
+          <label for="max_members_per_dimension">Members kept per dimension</label><input id="max_members_per_dimension" name="max_members_per_dimension" type="number" min="10">
+          <div class="hint">Larger dimensions keep this many; the rest are looked up when asked. Applies on the next Load/Refresh.</div>
+        </div>
+      </div>
       <p class="muted small">Secrets are encrypted on the server and never shown again. Leave a secret blank to keep the saved one.
         Details in <code>docs/ADMIN.md</code>.</p>
     </form>
@@ -305,12 +322,18 @@ const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({"&": "&amp;", "<
 const INTENTS = {
   data_query: "Answer number questions (e.g. Sales by market)",
   get_members: "List members (e.g. children of East)",
+  search_members: "Find a member by name (used for large outlines)",
   get_dimensions: "Describe the cube’s dimensions",
   list_applications: "List applications",
   list_databases: "List cubes in an application",
   calculation: "Run a calculation (admin only)",
 };
 let ctx = null, status = null, recent = [], adminPassword = "", currentTab = "ask", dirty = false;
+// Each browser picks its own cube; it never changes what other users see.
+let cube = null;
+const savedCube = () => { try { return localStorage.getItem("emcp.cube"); } catch { return null; } };
+const rememberCube = (c) => { try { localStorage.setItem("emcp.cube", c); } catch { /* private mode */ } };
+const q = (c) => `cube=${encodeURIComponent(c)}`;
 
 async function api(path, opts = {}, retry = true) {
   const headers = {"Content-Type": "application/json", "X-Requested-With": "essbase-mcp-assistant"};
@@ -322,7 +345,8 @@ async function api(path, opts = {}, retry = true) {
     adminPassword = pw; return api(path, opts, false);
   }
   const body = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(body.detail || res.statusText);
+  if (res.status === 503) throw new Error("Essbase is busy right now. Please try again in a few seconds.");
+  if (!res.ok) { const e = new Error(body.detail || res.statusText); e.status = res.status; throw e; }
   return body;
 }
 const msg = (kind, text) => `<div class="msg ${kind}">${esc(text)}</div>`;
@@ -362,16 +386,17 @@ async function loadStatus() {
 async function loadCubes() {
   const r = await api("/api/contexts");
   const opts = r.contexts.map((c) => c.cube);
-  if (!opts.includes(r.active_cube)) opts.unshift(r.active_cube);
-  $("cubeSelect").innerHTML = opts.map((c) => `<option ${c === r.active_cube ? "selected" : ""}>${esc(c)}</option>`).join("");
+  if (!cube) cube = opts.includes(savedCube()) ? savedCube() : r.default_cube;
+  if (!opts.includes(cube)) opts.unshift(cube);
+  $("cubeSelect").innerHTML = opts.map((c) => `<option ${c === cube ? "selected" : ""}>${esc(c)}</option>`).join("");
 }
-async function activateCube(cube) {
-  try { ctx = await api("/api/context/activate", {method: "POST", body: JSON.stringify({cube})}); }
-  catch (e) { ctx = null; }
-  await loadStatus(); await loadCubes(); resetAsk(); if (currentTab === "context") renderContext();
+async function activateCube(c) {
+  cube = c; rememberCube(c);
+  try { ctx = await api(`/api/context?${q(c)}`); } catch (e) { ctx = null; }
+  await loadCubes(); resetAsk(); if (currentTab === "context") renderContext();
 }
 $("cubeSelect").onchange = (e) => {
-  if (dirty && !confirm("Discard unsaved changes?")) { e.target.value = status.active_cube; return; }
+  if (dirty && !confirm("Discard unsaved changes?")) { e.target.value = cube; return; }
   setDirty(false); activateCube(e.target.value);
 };
 
@@ -382,11 +407,11 @@ const DEFAULT_EXAMPLES = {
   "ASOSamp.Basic": ["Units by geography", "Price Paid by store for Curr Year", "show the children of Personal Electronics"],
 };
 function resetAsk() {
-  const list = [...new Set([...(ctx?.examples || []).map((e) => e.question || e), ...(DEFAULT_EXAMPLES[status?.active_cube] || [])])].slice(0, 6);
+  const list = [...new Set([...(ctx?.examples || []).map((e) => e.question || e), ...(DEFAULT_EXAMPLES[cube] || [])])].slice(0, 6);
   $("examples").innerHTML = list.length ? `<span class="muted small">Try:</span>` + list.map((q) => `<button class="chip" type="button">${esc(q)}</button>`).join("") : "";
   $("examples").querySelectorAll(".chip").forEach((b) => b.onclick = () => { $("q").value = b.textContent; ask(); });
-  $("q").placeholder = `Ask about ${status?.active_cube || "your cube"}…`;
-  $("answer").innerHTML = ctx ? "" : `<div class="card">${msg("info", `${status?.active_cube || "This cube"} isn’t loaded yet. Open Cubes and click Load.`)}</div>`;
+  $("q").placeholder = `Ask about ${cube || "your cube"}…`;
+  $("answer").innerHTML = ctx ? "" : `<div class="card">${msg("info", `${cube || "This cube"} isn’t loaded yet. Open Cubes and click Load.`)}</div>`;
 }
 $("askForm").onsubmit = (e) => { e.preventDefault(); ask(); };
 
@@ -395,7 +420,7 @@ async function ask() {
   if (!question) return;
   $("askBtn").disabled = true; $("askBtn").textContent = "…";
   try {
-    const r = await api("/api/ask", {method: "POST", body: JSON.stringify({question, execute: true})});
+    const r = await api("/api/ask", {method: "POST", body: JSON.stringify({question, cube, execute: true})});
     $("answer").innerHTML = renderAnswer(question, r);
     const csv = $("csvBtn"); if (csv) csv.onclick = () => downloadCsv(r.result);
     recent = [question, ...recent.filter((q) => q !== question)].slice(0, 5);
@@ -418,7 +443,7 @@ function renderAnswer(question, r) {
     hasCsv = true;
     const max = Math.max(...d.rows.flatMap((x) => x.values).map(Math.abs), 1);
     body += `<table><thead><tr><th></th>${d.columns.map((c) => `<th class="num">${esc(c)}</th>`).join("")}</tr></thead><tbody>${
-      d.rows.map((row) => `<tr><td>${esc(row.member)}</td>${row.values.map((v) =>
+      d.rows.map((row) => `<tr><td>${esc(row.member)}${aliasOf(row.member) ? ` <span class="muted">· ${esc(aliasOf(row.member))}</span>` : ""}</td>${row.values.map((v) =>
         `<td class="num">${v.toLocaleString(undefined, {maximumFractionDigits: 2})}<span class="vbar" style="width:${Math.round(Math.abs(v) / max * 56)}px"></span></td>`).join("")}</tr>`).join("")}</tbody></table>`;
   } else if (d) {
     const list = d.members || d.dimensions || d.applications || d.databases;
@@ -439,8 +464,8 @@ function renderAnswer(question, r) {
     <dl><dt>Kind</dt><dd>${esc(INTENTS[p.intent] || p.intent)} <span class="muted">(${Math.round(p.confidence * 100)}% sure)</span></dd>
       <dt>Tool</dt><dd>${p.tool ? `<code>${esc(p.tool)}</code>` : "—"}</dd>
       <dt>Matched by</dt><dd>${p.entities.length ? p.entities.map((e) => `${esc(e.text)} → ${esc(e.dimension)}:${esc(e.member)} <span class="muted">(${esc(e.via)})</span>`).join("<br>") : "—"}</dd>
-      <dt>Time</dt><dd>${r.elapsed_ms} ms</dd></dl>
-    ${p.arguments?.query ? `<pre>${esc(formatMdx(p.arguments.query))}</pre>` : p.tool ? `<pre>${esc(JSON.stringify(p.arguments, null, 2))}</pre>` : ""}
+      <dt>Time</dt><dd>${r.elapsed_ms} ms total</dd></dl>
+    ${renderSteps(r.steps)}
   </details>`;
   return `<div class="card">
     <div class="answer-head"><h2>${esc(question)}</h2><div class="spacer"></div>
@@ -448,11 +473,29 @@ function renderAnswer(question, r) {
     ${body || ""}
     <div class="understood">${understood}${details}</div></div>`;
 }
+// show "400 · Fruit Soda" when the member name is a code
+function aliasOf(name) {
+  for (const d of ctx?.dimensions || []) {
+    const m = d.members.find((x) => x.name === name);
+    if (m) return m.alias && m.alias.toLowerCase() !== name.toLowerCase() ? m.alias : "";
+  }
+  return "";
+}
+const STEP_ICON = {done: "✓", cached: "✓", planned: "…", failed: "✕", skipped: "–"};
+function renderSteps(steps) {
+  if (!steps?.length) return "";
+  return `<ol class="steps">${steps.map((s) => `<li class="${esc(s.status)}">
+    <div class="row"><span class="sicon">${STEP_ICON[s.status] || ""}</span><b>${esc(s.purpose)}</b>
+      <span class="muted small">${s.status === "cached" ? "remembered" : esc(s.status)}${s.ms != null ? ` · ${s.ms} ms` : ""}${s.tool ? ` · <code>${esc(s.tool)}</code>` : ""}</span></div>
+    ${s.summary ? `<div class="small" style="margin:2px 0 0 22px">${esc(s.summary)}</div>` : ""}
+    ${s.arguments?.query && !s.arguments.query.startsWith("(") ? `<pre style="margin:6px 0 0 22px">${esc(formatMdx(s.arguments.query))}</pre>` : ""}
+  </li>`).join("")}</ol>`;
+}
 const formatMdx = (q) => q.replace(/^SELECT /, "SELECT\n  ").replace(/ ON COLUMNS, /, " ON COLUMNS,\n  ").replace(/ FROM /, "\nFROM ").replace(/ WHERE /, "\nWHERE ");
 function downloadCsv(d) {
   const lines = [["", ...d.columns], ...d.rows.map((r) => [r.member, ...r.values])].map((r) => r.map((v) => `"${String(v).replace(/"/g, '""')}"`).join(","));
   const a = document.createElement("a");
-  a.href = URL.createObjectURL(new Blob([lines.join("\n")], {type: "text/csv"})); a.download = `${status.active_cube}.csv`; a.click();
+  a.href = URL.createObjectURL(new Blob([lines.join("\n")], {type: "text/csv"})); a.download = `${cube}.csv`; a.click();
 }
 
 // ---------------- cubes ----------------
@@ -466,9 +509,9 @@ function renderCatalog() {
   const rows = catalogData.applications.flatMap((a) => a.error
     ? [`<tr><td>${esc(a.application)}</td><td colspan="2" style="color:var(--bad)">${esc(a.error)}</td></tr>`]
     : a.databases.map((d) => {
-      const active = d.cube === catalogData.active_cube;
-      return `<tr><td><b>${esc(a.application)}</b>.${esc(d.name)}</td>
-        <td>${active ? '<span class="tag blue">in use</span>' : d.saved ? '<span class="tag ok">loaded</span>' : '<span class="tag">not loaded</span>'}
+      const active = d.cube === cube;
+      return `<tr><td><b>${esc(a.application)}</b>.${esc(d.name)}${d.cube === catalogData.default_cube ? ' <span class="muted small">(default)</span>' : ""}</td>
+        <td>${active ? '<span class="tag blue">selected</span>' : d.saved ? '<span class="tag ok">loaded</span>' : '<span class="tag">not loaded</span>'}
           ${d.saved && d.generated_at ? `<span class="muted small"> · ${new Date(d.generated_at).toLocaleDateString()}</span>` : ""}</td>
         <td style="text-align:right;white-space:nowrap">
           ${d.saved ? `<button class="btn ghost sm" data-build="${esc(a.application)}|${esc(d.name)}">Refresh</button>`
@@ -483,8 +526,8 @@ function renderCatalog() {
 async function buildCube(application, database, btn, activate = true) {
   if (btn) { btn.disabled = true; btn.textContent = "Loading…"; }
   try {
-    const c = await api(`/api/context/build?activate=${activate}`, {method: "POST", body: JSON.stringify({application, database})});
-    if (activate) { ctx = c; await loadStatus(); resetAsk(); }
+    const c = await api("/api/context/build", {method: "POST", body: JSON.stringify({application, database})});
+    if (activate) { cube = `${application}.${database}`; rememberCube(cube); ctx = c; resetAsk(); }
     await loadCubes();
   } catch (e) { alert(`${application}.${database}: ${e.message}`); }
   if (btn) loadCatalog();
@@ -500,14 +543,17 @@ $("buildAll").onclick = async () => {
 
 // ---------------- context ----------------
 function renderContext() {
-  $("ctxCube").textContent = status?.active_cube || "";
+  $("ctxCube").textContent = cube || "";
   $("noContext").hidden = !!ctx; $("contextBody").hidden = !ctx;
   if (!ctx) return;
   const memberCount = ctx.dimensions.reduce((n, d) => n + d.members.length, 0);
   $("stats").innerHTML = [[ctx.dimensions.length, "dimensions"], [memberCount, "members"], [ctx.tools.length, "Essbase tools"],
     [ctx.generated_at ? new Date(ctx.generated_at).toLocaleDateString() : "—", "last refreshed"]]
     .map(([n, l]) => `<div class="stat"><b>${esc(n)}</b><span>${l}</span></div>`).join("");
-  $("dims").innerHTML = ctx.dimensions.map((d) => `<details><summary><b>${esc(d.name)}</b><span>${d.members.length} members</span></summary>
+  const partial = ctx.dimensions.filter((d) => d.truncated);
+  $("partialNote").innerHTML = partial.length ? msg("info", `Large dimension${partial.length > 1 ? "s" : ""} ${partial.map((d) =>
+    `${d.name} (${d.members.length.toLocaleString()} of ${d.total_members.toLocaleString()} members kept)`).join(", ")}: other members are looked up in Essbase the first time someone asks about them, then remembered.`) : "";
+  $("dims").innerHTML = ctx.dimensions.map((d) => `<details><summary><b>${esc(d.name)}</b><span>${d.members.length}${d.truncated ? ` of ${d.total_members}` : ""} members</span></summary>
     <div class="members">${d.members.map((m) => `<div>${esc(m.name)}${m.alias ? ` <small>${esc(m.alias)}</small>` : ""}</div>`).join("")}</div></details>`).join("");
 
   let dl = $("memberList");
@@ -546,11 +592,18 @@ async function saveContext() {
   const examples = $("examplesText").value.split("\n").map((s) => s.trim()).filter(Boolean).map((question) => ({question}));
   $("saveBtn").disabled = true;
   try {
-    ctx = await api("/api/context", {method: "PATCH", body: JSON.stringify({glossary, defaults, intents, notes: $("notes").value, examples})});
+    ctx = await api(`/api/context?${q(cube)}`, {method: "PATCH",
+      body: JSON.stringify({revision: ctx.revision, glossary, defaults, intents, notes: $("notes").value, examples})});
     setDirty(false); renderContext(); resetAsk(); flash("Saved.");
-  } catch (e) { $("saveMsg").innerHTML = `<span style="color:var(--bad)">${esc(e.message)}</span>`; }
+  } catch (e) {
+    $("saveMsg").innerHTML = e.status === 409
+      ? `<span style="color:var(--bad)">Someone else saved changes to this cube while you were editing.</span>
+         <button class="btn ghost sm" onclick="reloadContext()">Load their version</button>`
+      : `<span style="color:var(--bad)">${esc(e.message)}</span>`;
+  }
   $("saveBtn").disabled = false;
 }
+async function reloadContext() { ctx = await api(`/api/context?${q(cube)}`); setDirty(false); renderContext(); }
 $("rebuild").onclick = async () => {
   $("rebuild").disabled = true; $("rebuild").textContent = "Refreshing…";
   await buildCube(ctx.cube.application, ctx.cube.database, null);
@@ -578,7 +631,8 @@ async function loadAdmin() {
 function fillAdmin(s) {
   const f = $("adminForm");
   f.querySelectorAll("input[name=mode]").forEach((r) => r.checked = r.value === s.mode);
-  ["mcp_url", "token_url", "client_id", "scope", "llm_base_url", "llm_model"].forEach((k) => f.elements[k].value = s[k] ?? "");
+  ["mcp_url", "token_url", "client_id", "scope", "llm_base_url", "llm_model", "max_concurrent_calls", "queue_timeout_s",
+   "max_members_per_dimension"].forEach((k) => f.elements[k].value = s[k] ?? "");
   ["profile", "auth_mode", "llm_provider"].forEach((k) => f.elements[k].value = s[k]);
   f.elements.verify_tls.checked = !!s.verify_tls;
   for (const k of ["client_secret", "access_token", "llm_api_key"]) {
@@ -593,12 +647,13 @@ function syncAdmin() {
   document.querySelectorAll("#adminForm .cc").forEach((el) => el.classList.toggle("hide", am !== "client_credentials"));
   document.querySelectorAll("#adminForm .tok").forEach((el) => el.classList.toggle("hide", am !== "token"));
   document.querySelectorAll("#adminForm .llm").forEach((el) => el.classList.toggle("hide", f.elements.llm_provider.value === "none"));
-  $("aiNum").textContent = remote ? "3" : "2";
+  $("aiNum").textContent = remote ? "3" : "2"; $("capNum").textContent = remote ? "4" : "3";
 }
 function adminPayload() {
   const f = $("adminForm"), out = {mode: f.querySelector("input[name=mode]:checked")?.value};
   ["mcp_url", "token_url", "client_id", "scope", "llm_base_url", "llm_model", "profile", "auth_mode", "llm_provider",
-   "client_secret", "access_token", "llm_api_key"].forEach((k) => out[k] = f.elements[k].value);
+   "client_secret", "access_token", "llm_api_key", "max_concurrent_calls", "queue_timeout_s",
+   "max_members_per_dimension"].forEach((k) => out[k] = f.elements[k].value);
   out.verify_tls = f.elements.verify_tls.checked; out.clear_client_secret = f.elements.clear_client_secret.checked;
   return out;
 }
@@ -616,7 +671,7 @@ async function saveAdmin() {
     const r = await api("/api/admin/settings", {method: "PUT", body: JSON.stringify(adminPayload())});
     fillAdmin(r.settings); setDirty(false);
     await loadStatus(); await loadCubes();
-    ctx = status.has_context ? await api("/api/context") : null; resetAsk();
+    try { ctx = await api(`/api/context?${q(cube)}`); } catch { ctx = null; } resetAsk();
     flash(r.connection.ok ? "Saved and connected." : "Saved, but the connection failed (see above).");
   } catch (e) { $("saveMsg").innerHTML = `<span style="color:var(--bad)">${esc(e.message)}</span>`; }
   $("saveBtn").disabled = false;
@@ -625,7 +680,7 @@ async function saveAdmin() {
 // ---------------- boot ----------------
 (async () => {
   await loadStatus(); await loadCubes();
-  ctx = status.has_context ? await api("/api/context") : null;
+  try { ctx = await api(`/api/context?${q(cube)}`); } catch { ctx = null; }
   resetAsk();
   if (!ctx) showTab("cubes");
 })();

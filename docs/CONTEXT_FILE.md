@@ -8,7 +8,8 @@ Business rules = `notes`, Example questions = `examples`, and Advanced = `intent
 |---|---|---|
 | `source`, `cube`, `generated_at` | generated | Where and when it was built |
 | `tools` | generated (`tools/list`) | Name, description, input schema |
-| `dimensions` | generated | Dimension type, members, parents, aliases |
+| `dimensions` | generated | Dimension type, members, parents, aliases. Large dimensions are cut at `max_members_per_dimension` and marked `truncated` (with `total_members`); other members are looked up when asked |
+| `revision` | managed | Increases on every save; used to refuse conflicting edits |
 | `intents` | suggested + **curated** | intent → tool name. Overrides survive a refresh while the tool still exists |
 | `glossary` | **curated** | Business term → member, or a list of members |
 | `defaults` | **curated** | Member used when a question doesn't name that dimension (`Scenario: Actual`) |

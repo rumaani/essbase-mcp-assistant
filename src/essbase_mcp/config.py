@@ -23,6 +23,12 @@ def _load_dotenv(path: str = ".env") -> None:
 
 
 SECRET_FIELDS = ("client_secret", "access_token", "llm_api_key")
+INT_LIMITS = {  # field: (min, max)
+    "max_concurrent_calls": (1, 500),
+    "queue_timeout_s": (1, 600),
+    "request_timeout_s": (5, 600),
+    "max_members_per_dimension": (10, 1_000_000),
+}
 CHOICES = {
     "mode": ("mock", "remote"),
     "profile": ("viewer", "analyst", "admin"),
@@ -49,6 +55,11 @@ class Settings:
     llm_base_url: str = ""
     llm_model: str = ""
     llm_api_key: str = field(default="", repr=False)
+    # capacity (many users share one connection to Essbase)
+    max_concurrent_calls: int = 20      # Essbase MCP calls in flight at once; others queue
+    queue_timeout_s: int = 30           # how long a queued call waits before "busy"
+    request_timeout_s: int = 60         # per HTTP call to Essbase / identity domain
+    max_members_per_dimension: int = 5000  # members cached per dimension; the rest are looked up
     # context
     context_dir: str = "contexts"
     active_cube: str = "Sample.Basic"
@@ -79,6 +90,11 @@ class Settings:
             llm_base_url=e("LLM_BASE_URL", ""),
             llm_model=e("LLM_MODEL", ""),
             llm_api_key=e("LLM_API_KEY", ""),
+            max_concurrent_calls=int(e("MAX_CONCURRENT_CALLS", d.max_concurrent_calls)),
+            queue_timeout_s=int(e("QUEUE_TIMEOUT_S", d.queue_timeout_s)),
+            request_timeout_s=int(e("REQUEST_TIMEOUT_S", d.request_timeout_s)),
+            max_members_per_dimension=int(e("MAX_MEMBERS_PER_DIMENSION",
+                                            d.max_members_per_dimension)),
             context_dir=e("CONTEXT_DIR", d.context_dir),
             active_cube=e("ACTIVE_CUBE", d.active_cube),
             data_dir=e("EMCP_DATA_DIR", d.data_dir),

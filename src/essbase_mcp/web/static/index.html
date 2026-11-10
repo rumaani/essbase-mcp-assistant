@@ -20,6 +20,8 @@
   /* ---------- header ---------- */
   header { background: var(--panel); border-bottom: 1px solid var(--line); position: sticky; top: 0; z-index: 10; }
   .bar { max-width: var(--w); margin: 0 auto; padding: 10px 20px; display: flex; align-items: center; gap: 16px; }
+  header .bar { max-width: 1160px; }
+  .status select { min-width: 150px; }
   .brand { font-weight: 650; font-size: 15px; white-space: nowrap; }
   nav { display: flex; gap: 2px; }
   nav button { border: 0; background: none; padding: 7px 12px; border-radius: 6px; cursor: pointer; color: var(--muted); }
@@ -101,6 +103,7 @@
   ol.steps li { padding: 4px 0 10px 12px; position: relative; }
   .sicon { width: 16px; display: inline-block; color: var(--ok); font-weight: 700; }
   li.failed .sicon { color: var(--bad); } li.planned .sicon, li.skipped .sicon { color: var(--muted); }
+  td.noaccess { color: var(--muted); font-size: 12.5px; letter-spacing: .02em; }
   .vbar { display: inline-block; height: 6px; border-radius: 3px; background: var(--accent); opacity: .22; margin-left: 10px; vertical-align: middle; }
 
   /* ---------- context ---------- */
@@ -150,11 +153,22 @@
     <div class="status">
       <select id="cubeSelect" title="Cube you are asking about"></select>
       <span id="connDot" class="dot"></span><span id="connText">Checking…</span>
+      <span id="userBox"></span>
     </div>
   </div>
 </header>
 
 <main>
+  <!-- shown instead of Ask / Cubes / Context until the person signs in (per-user mode) -->
+  <section id="signinGate" hidden>
+    <div class="card" style="text-align:center;padding:40px 22px">
+      <h1 class="page-title" id="gateTitle">Sign in to continue</h1>
+      <p class="page-sub" id="gateText" style="margin:6px auto 20px;max-width:540px">Essbase shows each person only the data their
+        security filters allow, so you need to sign in with your own account first.</p>
+      <a class="btn primary" href="/auth/login" id="gateBtn" onclick="allowAuto()" style="text-decoration:none;display:inline-block">Sign in</a>
+    </div>
+  </section>
+
   <!-- ======================= ASK ======================= -->
   <section id="tab-ask" class="tab active">
     <div class="card">
@@ -264,19 +278,46 @@
         </div>
       </div>
 
-      <div class="card remote">
-        <div class="step"><div class="stepnum">2</div><div><h3>Sign-in</h3><p>An OAuth client from your OCI IAM identity domain (confidential app, client credentials).</p></div></div>
-        <div class="form">
-          <label for="auth_mode">Method</label>
-          <select id="auth_mode" name="auth_mode"><option value="client_credentials">OAuth client credentials</option>
+      <div class="card">
+        <div class="step"><div class="stepnum">2</div><div><h3>Who Essbase sees</h3>
+          <p>Choose whether everyone uses one service account, or each person signs in so Essbase applies their own security filters.</p></div></div>
+        <div class="modes">
+          <label class="mode"><input type="radio" name="identity_mode" value="shared"><div><b>One service account</b>
+            <span>Everyone sees what the service account can see. Simplest to set up.</span></div></label>
+          <label class="mode"><input type="radio" name="identity_mode" value="per_user"><div><b>Each person signs in</b>
+            <span>Essbase applies each person’s own roles and filters.</span></div></label>
+        </div>
+        <div class="msg info mockonly peruser" style="margin-left:40px">The built-in sample has three demo users to sign in as:
+          <b>Alice</b> (East only), <b>Bob</b> (West only) and <b>Carol</b> (all data). Choose
+          <i>Microsoft Entra ID</i> below to try single sign-on with a mock Microsoft account picker.</div>
+        <div class="form remote" style="margin-top:16px">
+          <label class="shared" for="auth_mode">Method</label>
+          <select class="shared" id="auth_mode" name="auth_mode"><option value="client_credentials">OAuth client credentials</option>
             <option value="token">Paste a bearer token (testing)</option><option value="none">None</option></select>
           <label class="cc" for="token_url">Token URL</label><input class="cc" id="token_url" name="token_url" placeholder="https://idcs-xxxx.identity.oraclecloud.com/oauth2/v1/token">
           <label class="cc" for="client_id">Client ID</label><input class="cc" id="client_id" name="client_id">
           <label class="cc" for="client_secret">Client secret</label>
           <div class="cc row" style="flex-wrap:nowrap"><input id="client_secret" name="client_secret" type="password" autocomplete="new-password">
             <label class="small muted" id="clearSecretWrap" style="white-space:nowrap"><input type="checkbox" name="clear_client_secret"> clear</label></div>
-          <label class="cc" for="scope">Scope</label><input class="cc" id="scope" name="scope">
+          <label class="shared cc" for="scope">Scope</label><input class="shared cc" id="scope" name="scope">
           <label class="tok" for="access_token">Access token</label><input class="tok" id="access_token" name="access_token" type="password" autocomplete="new-password">
+          <label class="peruser" for="authorize_url">Authorization URL</label><input class="peruser" id="authorize_url" name="authorize_url" placeholder="automatic: the token URL with /authorize">
+          <label class="peruser" for="redirect_url">Redirect URL</label><input class="peruser" id="redirect_url" name="redirect_url">
+          <div class="hint peruser">Register this exact URL on the confidential app in your identity domain.</div>
+          <label class="peruser" for="user_scope">Sign-in scope</label><input class="peruser" id="user_scope" name="user_scope">
+          <div class="hint peruser"><code>offline_access</code> gives a refresh token so people stay signed in; the app needs the Refresh Token grant.</div>
+        </div>
+        <div class="form peruser" style="margin-top:12px">
+          <label for="sso_provider">Sign-in page</label>
+          <select id="sso_provider" name="sso_provider">
+            <option value="identity_domain">Identity domain sign-in page</option>
+            <option value="entra">Microsoft Entra ID (single sign-on)</option></select>
+          <div class="hint">With Entra ID, your identity domain sends people to Microsoft. Set it up as the domain’s
+            identity provider first (see <code>docs/ENTRA_SSO.md</code>).</div>
+          <label></label><label class="small" style="color:var(--ink)"><input type="checkbox" name="auto_signin"> Sign people in automatically when they open the app</label>
+          <label for="signout_url">Also sign out of</label><input id="signout_url" name="signout_url" placeholder="optional: SSO sign-out URL">
+          <div class="hint">Leave blank to keep people signed in to Microsoft after they leave this app (the usual choice).</div>
+          <label for="session_hours">Sign out after (hours idle)</label><input id="session_hours" name="session_hours" type="number" min="1" max="168">
         </div>
       </div>
 
@@ -328,7 +369,55 @@ const INTENTS = {
   list_databases: "List cubes in an application",
   calculation: "Run a calculation (admin only)",
 };
-let ctx = null, status = null, recent = [], adminPassword = "", currentTab = "ask", dirty = false;
+let ctx = null, status = null, recent = [], adminPassword = "", currentTab = "ask", dirty = false, me = null;
+const gated = () => me?.identity_mode === "per_user" && !me.signed_in;
+function applyGate() {
+  const block = gated() && currentTab !== "admin";
+  $("signinGate").hidden = !block;
+  $("cubeSelect").hidden = gated();
+  document.querySelectorAll(".tab").forEach((t) => t.classList.toggle("active", !block && t.id === "tab-" + currentTab));
+}
+function renderUser() {
+  const box = $("userBox");
+  if (me?.identity_mode !== "per_user") { box.innerHTML = ""; return; }
+  box.innerHTML = me.signed_in
+    ? `· <b style="color:var(--ink)">${esc(me.name)}</b> <button class="btn ghost sm" id="signOut">Sign out</button>`
+    : `· <a class="btn primary sm" href="/auth/login" onclick="allowAuto()" style="text-decoration:none">${isMicrosoft() ? "Sign in with Microsoft" : "Sign in"}</a>`;
+  if (me.signed_in) {
+    ss.del("emcp.autotry");
+    $("signOut").onclick = async () => {
+      const r = await api("/auth/logout", {method: "POST"});
+      ss.set("emcp.noauto", "1");  // don't sign straight back in through SSO
+      if (r.redirect) location.href = r.redirect; else location.reload();
+    };
+  }
+  renderGate();
+}
+async function loadMe() { me = await api("/api/me"); renderUser(); applyGate(); }
+
+// ---- single sign-on: send people to sign-in automatically, without loops ----
+const ss = {get: (k) => { try { return sessionStorage.getItem(k); } catch { return null; } },
+            set: (k, v) => { try { sessionStorage.setItem(k, v); } catch { /* ignore */ } },
+            del: (k) => { try { sessionStorage.removeItem(k); } catch { /* ignore */ } }};
+const isMicrosoft = () => me?.sso_provider === "entra";
+function allowAuto() { ss.del("emcp.noauto"); }
+function maybeAutoSignin() {
+  if (!gated() || !me?.auto_signin) return false;
+  if (ss.get("emcp.noauto")) return false;                       // they just signed out
+  const tried = Number(ss.get("emcp.autotry") || 0);
+  if (Date.now() - tried < 60000) return false;                  // came back without a session: stop
+  ss.set("emcp.autotry", String(Date.now()));
+  location.href = "/auth/login";
+  return true;
+}
+function renderGate() {
+  const ms = isMicrosoft();
+  $("gateTitle").textContent = ms ? "Sign in with your work account" : "Sign in to continue";
+  $("gateText").textContent = ms
+    ? "Essbase shows each person only the data their security filters allow. Sign in with Microsoft. If you're already signed in to Windows or Microsoft 365, this takes a second."
+    : "Essbase shows each person only the data their security filters allow, so you need to sign in with your own account first.";
+  $("gateBtn").textContent = ms ? "Sign in with Microsoft" : "Sign in";
+}
 // Each browser picks its own cube; it never changes what other users see.
 let cube = null;
 const savedCube = () => { try { return localStorage.getItem("emcp.cube"); } catch { return null; } };
@@ -346,6 +435,10 @@ async function api(path, opts = {}, retry = true) {
   }
   const body = await res.json().catch(() => ({}));
   if (res.status === 503) throw new Error("Essbase is busy right now. Please try again in a few seconds.");
+  if (res.status === 401 && body.signin) {
+    me = {...(me || {}), identity_mode: "per_user", signed_in: false}; applyGate(); renderUser(); maybeAutoSignin();
+    const e = new Error(body.detail); e.signin = true; throw e;
+  }
   if (!res.ok) { const e = new Error(body.detail || res.statusText); e.status = res.status; throw e; }
   return body;
 }
@@ -359,6 +452,8 @@ function showTab(name) {
   document.querySelectorAll("nav button").forEach((x) => x.classList.toggle("active", x.dataset.tab === name));
   document.querySelectorAll(".tab").forEach((t) => t.classList.toggle("active", t.id === "tab-" + name));
   $("testBtn").hidden = name !== "admin";
+  applyGate();
+  if (gated() && name !== "admin") return;
   if (name === "cubes") loadCatalog();
   if (name === "admin") loadAdmin();
   if (name === "context") renderContext();
@@ -371,7 +466,10 @@ function setDirty(v, text = "You have unsaved changes.") {
 $("tab-context").addEventListener("input", () => setDirty(true));
 $("tab-context").addEventListener("change", () => setDirty(true));
 $("adminForm").addEventListener("input", () => setDirty(true));
-$("adminForm").addEventListener("change", () => { syncAdmin(); setDirty(true); });
+$("adminForm").addEventListener("change", (e) => {
+  if (e.target.name === "sso_provider" && e.target.value === "entra") $("adminForm").elements.auto_signin.checked = true;
+  syncAdmin(); setDirty(true);
+});
 $("discardBtn").onclick = () => { setDirty(false); currentTab === "admin" ? loadAdmin() : renderContext(); };
 $("saveBtn").onclick = () => currentTab === "admin" ? saveAdmin() : saveContext();
 $("testBtn").onclick = testAdmin;
@@ -441,10 +539,12 @@ function renderAnswer(question, r) {
   let hasCsv = false;
   if (d && d.columns && d.rows) {
     hasCsv = true;
-    const max = Math.max(...d.rows.flatMap((x) => x.values).map(Math.abs), 1);
+    const max = Math.max(...d.rows.flatMap((x) => x.values).filter((v) => v != null).map(Math.abs), 1);
+    if (d.no_access_cells) body += msg("info", `${d.no_access_cells} cell${d.no_access_cells > 1 ? "s are" : " is"} hidden by your Essbase security filter (#NoAccess).`);
     body += `<table><thead><tr><th></th>${d.columns.map((c) => `<th class="num">${esc(c)}</th>`).join("")}</tr></thead><tbody>${
-      d.rows.map((row) => `<tr><td>${esc(row.member)}${aliasOf(row.member) ? ` <span class="muted">· ${esc(aliasOf(row.member))}</span>` : ""}</td>${row.values.map((v) =>
-        `<td class="num">${v.toLocaleString(undefined, {maximumFractionDigits: 2})}<span class="vbar" style="width:${Math.round(Math.abs(v) / max * 56)}px"></span></td>`).join("")}</tr>`).join("")}</tbody></table>`;
+      d.rows.map((row) => `<tr><td>${esc(row.member)}${aliasOf(row.member) ? ` <span class="muted">· ${esc(aliasOf(row.member))}</span>` : ""}</td>${row.values.map((v) => v == null
+        ? `<td class="num noaccess" title="Hidden by your Essbase security filter">#NoAccess</td>`
+        : `<td class="num">${v.toLocaleString(undefined, {maximumFractionDigits: 2})}<span class="vbar" style="width:${Math.round(Math.abs(v) / max * 56)}px"></span></td>`).join("")}</tr>`).join("")}</tbody></table>`;
   } else if (d) {
     const list = d.members || d.dimensions || d.applications || d.databases;
     if (Array.isArray(list)) {
@@ -493,7 +593,7 @@ function renderSteps(steps) {
 }
 const formatMdx = (q) => q.replace(/^SELECT /, "SELECT\n  ").replace(/ ON COLUMNS, /, " ON COLUMNS,\n  ").replace(/ FROM /, "\nFROM ").replace(/ WHERE /, "\nWHERE ");
 function downloadCsv(d) {
-  const lines = [["", ...d.columns], ...d.rows.map((r) => [r.member, ...r.values])].map((r) => r.map((v) => `"${String(v).replace(/"/g, '""')}"`).join(","));
+  const lines = [["", ...d.columns], ...d.rows.map((r) => [r.member, ...r.values.map((v) => v ?? "#NoAccess")])].map((r) => r.map((v) => `"${String(v).replace(/"/g, '""')}"`).join(","));
   const a = document.createElement("a");
   a.href = URL.createObjectURL(new Blob([lines.join("\n")], {type: "text/csv"})); a.download = `${cube}.csv`; a.click();
 }
@@ -620,9 +720,11 @@ function renderConnCard() {
   const s = status; if (!s) return;
   $("connCard").innerHTML = `<div class="row"><span class="dot ${s.connected ? "ok" : "bad"}"></span>
     <b>${s.connected ? "Connected" : "Not connected"}</b>
-    <span class="muted">· ${s.mode === "mock" ? "built-in sample server" : esc(s.mcp_url)} · ${esc(s.profile)}</span></div>
-    ${s.error ? msg("bad", s.error) : `<div class="muted small" style="margin-top:6px">${s.server ? esc(s.server.name) + " " + esc(s.server.version || "") : ""}${
-      s.token_expires_in ? ` · sign-in valid for ${Math.round(s.token_expires_in / 60)} min` : ""}</div>`}`;
+    <span class="muted">· ${s.mode === "mock" ? "built-in sample server" : esc(s.mcp_url)} · ${esc(s.profile)} ·
+      ${s.identity_mode === "per_user" ? `each person signs in${s.user ? ` (you: ${esc(s.user)})` : ""}` : "one service account"}</span></div>
+    ${s.error ? msg("bad", s.error) : `<div class="muted small" style="margin-top:6px">${[
+      s.server ? `${esc(s.server.name)} ${esc(s.server.version || "")}` : "",
+      s.token_expires_in ? `sign-in valid for ${Math.round(s.token_expires_in / 60)} min` : ""].filter(Boolean).join(" · ")}</div>`}`;
 }
 async function loadAdmin() {
   try { fillAdmin(await api("/api/admin/settings")); setDirty(false); }
@@ -632,7 +734,10 @@ function fillAdmin(s) {
   const f = $("adminForm");
   f.querySelectorAll("input[name=mode]").forEach((r) => r.checked = r.value === s.mode);
   ["mcp_url", "token_url", "client_id", "scope", "llm_base_url", "llm_model", "max_concurrent_calls", "queue_timeout_s",
-   "max_members_per_dimension"].forEach((k) => f.elements[k].value = s[k] ?? "");
+   "max_members_per_dimension", "authorize_url", "redirect_url", "user_scope", "session_hours", "signout_url",
+   "sso_provider"].forEach((k) => f.elements[k].value = s[k] ?? "");
+  f.elements.auto_signin.checked = !!s.auto_signin;
+  f.querySelectorAll("input[name=identity_mode]").forEach((r) => r.checked = r.value === s.identity_mode);
   ["profile", "auth_mode", "llm_provider"].forEach((k) => f.elements[k].value = s[k]);
   f.elements.verify_tls.checked = !!s.verify_tls;
   for (const k of ["client_secret", "access_token", "llm_api_key"]) {
@@ -643,17 +748,25 @@ function fillAdmin(s) {
 }
 function syncAdmin() {
   const f = $("adminForm"), remote = f.querySelector("input[name=mode]:checked")?.value === "remote", am = f.elements.auth_mode.value;
-  document.querySelectorAll("#adminForm .remote").forEach((el) => el.classList.toggle("hide", !remote));
-  document.querySelectorAll("#adminForm .cc").forEach((el) => el.classList.toggle("hide", am !== "client_credentials"));
-  document.querySelectorAll("#adminForm .tok").forEach((el) => el.classList.toggle("hide", am !== "token"));
+  const perUser = f.querySelector("input[name=identity_mode]:checked")?.value === "per_user";
+  const hidden = (el) => (el.classList.contains("remote") && !remote) || (el.classList.contains("mockonly") && remote)
+    || (el.classList.contains("shared") && perUser) || (el.classList.contains("peruser") && !perUser)
+    || (el.classList.contains("cc") && !perUser && am !== "client_credentials")
+    || (el.classList.contains("tok") && (perUser || am !== "token"));
+  document.querySelectorAll("#adminForm .remote, #adminForm .mockonly, #adminForm .shared, #adminForm .peruser, #adminForm .cc, #adminForm .tok")
+    .forEach((el) => el.classList.toggle("hide", hidden(el)));
+  f.elements.redirect_url.placeholder = `automatic: ${location.origin}/auth/callback`;
   document.querySelectorAll("#adminForm .llm").forEach((el) => el.classList.toggle("hide", f.elements.llm_provider.value === "none"));
-  $("aiNum").textContent = remote ? "3" : "2"; $("capNum").textContent = remote ? "4" : "3";
+  $("aiNum").textContent = "3"; $("capNum").textContent = "4";
 }
 function adminPayload() {
-  const f = $("adminForm"), out = {mode: f.querySelector("input[name=mode]:checked")?.value};
+  const f = $("adminForm"), out = {mode: f.querySelector("input[name=mode]:checked")?.value,
+    identity_mode: f.querySelector("input[name=identity_mode]:checked")?.value};
   ["mcp_url", "token_url", "client_id", "scope", "llm_base_url", "llm_model", "profile", "auth_mode", "llm_provider",
    "client_secret", "access_token", "llm_api_key", "max_concurrent_calls", "queue_timeout_s",
-   "max_members_per_dimension"].forEach((k) => out[k] = f.elements[k].value);
+   "max_members_per_dimension", "authorize_url", "redirect_url", "user_scope", "session_hours", "signout_url",
+   "sso_provider"].forEach((k) => out[k] = f.elements[k].value);
+  out.auto_signin = f.elements.auto_signin.checked;
   out.verify_tls = f.elements.verify_tls.checked; out.clear_client_secret = f.elements.clear_client_secret.checked;
   return out;
 }
@@ -661,7 +774,7 @@ async function testAdmin() {
   $("saveMsg").textContent = "Testing…";
   try {
     const r = await api("/api/admin/test", {method: "POST", body: JSON.stringify(adminPayload())});
-    $("saveMsg").innerHTML = r.ok ? `<span style="color:var(--ok)">✓ Works: ${esc(r.server.name)}, ${r.tool_count} tools. Not saved yet.</span>`
+    $("saveMsg").innerHTML = r.ok ? `<span style="color:var(--ok)">✓ ${r.per_user ? esc(r.note) : `Works: ${esc(r.server.name)}, ${r.tool_count} tools.`} Not saved yet.</span>`
                                   : `<span style="color:var(--bad)">${esc(r.error)}</span>`;
   } catch (e) { $("saveMsg").innerHTML = `<span style="color:var(--bad)">${esc(e.message)}</span>`; }
 }
@@ -670,16 +783,23 @@ async function saveAdmin() {
   try {
     const r = await api("/api/admin/settings", {method: "PUT", body: JSON.stringify(adminPayload())});
     fillAdmin(r.settings); setDirty(false);
-    await loadStatus(); await loadCubes();
-    try { ctx = await api(`/api/context?${q(cube)}`); } catch { ctx = null; } resetAsk();
-    flash(r.connection.ok ? "Saved and connected." : "Saved, but the connection failed (see above).");
-  } catch (e) { $("saveMsg").innerHTML = `<span style="color:var(--bad)">${esc(e.message)}</span>`; }
+    await loadStatus(); await loadMe();
+    if (!gated()) {
+      await loadCubes();
+      try { ctx = await api(`/api/context?${q(cube)}`); } catch { ctx = null; }
+      resetAsk();
+    }
+    flash(r.connection.ok ? (r.connection.per_user ? "Saved. People now sign in with their own account." : "Saved and connected.")
+                          : "Saved, but the connection failed (see above).");
+  } catch (e) { if (!e.signin) $("saveMsg").innerHTML = `<span style="color:var(--bad)">${esc(e.message)}</span>`; }
   $("saveBtn").disabled = false;
 }
 
 // ---------------- boot ----------------
 (async () => {
-  await loadStatus(); await loadCubes();
+  await loadStatus(); await loadMe();
+  if (gated()) { maybeAutoSignin(); return; }
+  await loadCubes();
   try { ctx = await api(`/api/context?${q(cube)}`); } catch { ctx = null; }
   resetAsk();
   if (!ctx) showTab("cubes");

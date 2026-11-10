@@ -28,11 +28,14 @@ INT_LIMITS = {  # field: (min, max)
     "queue_timeout_s": (1, 600),
     "request_timeout_s": (5, 600),
     "max_members_per_dimension": (10, 1_000_000),
+    "session_hours": (1, 168),
 }
 CHOICES = {
     "mode": ("mock", "remote"),
     "profile": ("viewer", "analyst", "admin"),
     "auth_mode": ("client_credentials", "token", "none"),
+    "identity_mode": ("shared", "per_user"),
+    "sso_provider": ("identity_domain", "entra"),
     "llm_provider": ("none", "openai_compatible"),
 }
 
@@ -50,6 +53,17 @@ class Settings:
     scope: str = "urn:opc:idm:__myscopes__"
     access_token: str = field(default="", repr=False)
     verify_tls: bool = True
+    # who Essbase sees: one shared service account, or each person signing in
+    identity_mode: str = "shared"       # shared | per_user
+    authorize_url: str = ""             # per_user; blank = token URL with /token -> /authorize
+    redirect_url: str = ""              # per_user; blank = <this app>/auth/callback
+    user_scope: str = "urn:opc:idm:__myscopes__ openid offline_access"
+    session_hours: int = 8              # idle sign-out
+    # how people sign in (per_user): the identity domain's own page, or Microsoft Entra ID
+    # federated with the identity domain (Entra is the domain's identity provider)
+    sso_provider: str = "identity_domain"
+    auto_signin: bool = False           # send people to sign-in automatically (SSO = no clicks)
+    signout_url: str = ""               # optional: also end the SSO session after app sign-out
     # query understanding
     llm_provider: str = "none"
     llm_base_url: str = ""
@@ -86,6 +100,14 @@ class Settings:
             scope=e("OAUTH_SCOPE", d.scope),
             access_token=e("ACCESS_TOKEN", ""),
             verify_tls=e("VERIFY_TLS", "true").lower() != "false",
+            identity_mode=e("IDENTITY_MODE", d.identity_mode),
+            authorize_url=e("OAUTH_AUTHORIZE_URL", ""),
+            redirect_url=e("OAUTH_REDIRECT_URL", ""),
+            user_scope=e("OAUTH_USER_SCOPE", d.user_scope),
+            session_hours=int(e("SESSION_HOURS", d.session_hours)),
+            sso_provider=e("SSO_PROVIDER", d.sso_provider),
+            auto_signin=e("AUTO_SIGNIN", "false").lower() == "true",
+            signout_url=e("SIGNOUT_URL", ""),
             llm_provider=e("LLM_PROVIDER", d.llm_provider),
             llm_base_url=e("LLM_BASE_URL", ""),
             llm_model=e("LLM_MODEL", ""),

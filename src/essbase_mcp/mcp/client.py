@@ -68,7 +68,8 @@ class Metrics:
 class MCPClient:
     def __init__(self, url: str, profile: str = "viewer", auth: TokenProvider | None = None,
                  http: httpx.Client | None = None, max_concurrent: int = 20,
-                 queue_timeout: float = 30.0, metrics: Metrics | None = None):
+                 queue_timeout: float = 30.0, metrics: Metrics | None = None,
+                 slots: threading.BoundedSemaphore | None = None):
         self.url = url
         self.profile = profile
         self.auth = auth or NoAuth()
@@ -77,7 +78,8 @@ class MCPClient:
         self.server_info: dict | None = None
         self._ids = itertools.count(1)
         self._init_lock = threading.Lock()
-        self._slots = threading.BoundedSemaphore(max(1, max_concurrent))
+        # shared across all users' clients when passed in: one cap on calls to Essbase
+        self._slots = slots or threading.BoundedSemaphore(max(1, max_concurrent))
         self.queue_timeout = queue_timeout
         self.metrics = metrics or Metrics()
 

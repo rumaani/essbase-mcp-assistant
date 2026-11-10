@@ -68,10 +68,11 @@ Throughput is bounded by `max_concurrent_calls ÷ Essbase latency` (20 ÷ 0.2 s 
 To go faster, raise the cap if your Essbase server has headroom.
 
 ## Limits of this reference
-- **One identity for everyone.** With client credentials, Essbase sees the app, not the
-  person, so security filters don't differ per user. For that, use per-user sign-in
-  (authorization code + PKCE; on the roadmap). The concurrency design stays the same, with
-  one token per user instead of one shared.
+- **Identity.** In the shared mode Essbase sees one service account. With **Each person
+  signs in** ([PER_USER_SECURITY.md](PER_USER_SECURITY.md)) every user has their own token
+  and MCP session, refreshed single-flight per user. They all share the connection pool and
+  the cap on parallel calls, so the guarantees above still hold (tested with 60 signed-in
+  users and 180 parallel questions, no identity mix-ups).
 - **One process.** Counters, the lookup cache and the call limiter are per process. If you run
   several processes or containers, each has its own (the per-server cap becomes cap × processes).
   Contexts are shared through the files, and the revision check and atomic writes keep edits

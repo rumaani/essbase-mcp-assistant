@@ -10,15 +10,19 @@ Run:  python -m essbase_mcp.mock.server   (port 9100)
 from __future__ import annotations
 
 import asyncio
+import base64
+import hashlib
+import html
 import json
 import os
 import re
 import secrets
 import time
 import uuid
+from urllib.parse import urlencode
 
 from fastapi import FastAPI, Form, Header, HTTPException, Request
-from fastapi.responses import JSONResponse, Response
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, Response
 
 CLIENT_ID, CLIENT_SECRET = "essbase-assistant", "change-me"
 PROFILE_RANK = {"viewer": 0, "analyst": 1, "admin": 2}
@@ -123,23 +127,105 @@ TOOLS = [
 ]
 
 app = FastAPI(title="Mock Essbase MCP")
-_tokens: dict[str, float] = {}
+
+# --- demo users and their Essbase security filters (read access) ---------------------
+# A cell is readable only if, for each filtered dimension, the cell's member is the allowed
+# member or one of its descendants - like an Essbase filter on @IDESCENDANTS("East").
+USERS = {
+    "alice": {"name": "Alice Analyst", "note": "East only",
+              "filters": {"Market": ["East"], "Geography": ["East"]}},
+    "bob": {"name": "Bob Buyer", "note": "West only",
+            "filters": {"Market": ["West"], "Geography": ["West"]}},
+    "carol": {"name": "Carol Controller", "note": "all data", "filters": {}},
+}
+SERVICE_USER = {"name": "Service account", "note": "client credentials", "filters": {}}
+ACCESS_TTL = 3600  # seconds; tests shorten it to exercise refresh
+
+_tokens: dict[str, dict] = {}        # access token -> {"exp", "user"}
+_refresh: dict[str, str] = {}        # refresh token -> username
+_codes: dict[str, dict] = {}         # auth code -> request details
 SESSIONS: set[str] = set()  # tests clear this to simulate the server dropping sessions
 STATS = {"tokens_issued": 0, "calls": 0}
 LATENCY_S = int(os.environ.get("EMCP_MOCK_LATENCY_MS", "0")) / 1000
 
 
+def _issue(user: str | None, with_refresh: bool) -> dict:
+    tok = secrets.token_urlsafe(24)
+    _tokens[tok] = {"exp": time.time() + ACCESS_TTL, "user": user}
+    STATS["tokens_issued"] += 1
+    out = {"access_token": tok, "token_type": "Bearer", "expires_in": ACCESS_TTL}
+    if user:
+        claims = {"sub": user, "user_displayname": USERS[user]["name"], "iss": "mock-idcs"}
+        out["id_token"] = ".".join(base64.urlsafe_b64encode(json.dumps(x).encode()).decode()
+                                   .rstrip("=") for x in ({"alg": "none"}, claims)) + "."
+    if user and with_refresh:
+        rt = secrets.token_urlsafe(24)
+        _refresh[rt] = user
+        out["refresh_token"] = rt
+    return out
+
+
+@app.get("/oauth2/v1/authorize", response_class=HTMLResponse)
+def authorize(client_id: str, redirect_uri: str, response_type: str = "code", state: str = "",
+              scope: str = "", code_challenge: str = "", code_challenge_method: str = "",
+              nonce: str = ""):
+    if client_id != CLIENT_ID or response_type != "code":
+        raise HTTPException(400, "invalid_request")
+    if code_challenge_method != "S256" or not code_challenge:
+        raise HTTPException(400, "PKCE (S256) is required")
+    hidden = "".join(f'<input type="hidden" name="{k}" value="{html.escape(v)}">' for k, v in {
+        "redirect_uri": redirect_uri, "state": state, "scope": scope,
+        "code_challenge": code_challenge, "nonce": nonce}.items())
+    buttons = "".join(
+        f'<button name="username" value="{u}"><b>{html.escape(d["name"])}</b>'
+        f'<span>{html.escape(d["note"])}</span></button>' for u, d in USERS.items())
+    return f"""<!doctype html><title>Sign in · Mock identity domain</title>
+<style>body{{font:15px system-ui;background:#f2f4f7;display:grid;place-items:center;height:100vh;margin:0}}
+form{{background:#fff;padding:28px 32px;border-radius:12px;box-shadow:0 6px 24px #0001;width:340px}}
+h1{{font-size:18px;margin:0 0 4px}}p{{color:#667;margin:0 0 18px;font-size:13px}}
+button{{display:block;width:100%;text-align:left;padding:10px 14px;margin:8px 0;border:1px solid #d0d5dd;
+border-radius:8px;background:#fff;cursor:pointer;font:inherit}}button:hover{{border-color:#2f5bd3}}
+button span{{display:block;color:#667;font-size:12.5px}}</style>
+<form method="post" action="approve"><h1>Mock identity domain</h1>
+<p>Pick a demo user. Each has a different Essbase security filter.</p>{hidden}{buttons}</form>"""
+
+
+@app.post("/oauth2/v1/approve")
+def approve(username: str = Form(...), redirect_uri: str = Form(...), state: str = Form(""),
+            scope: str = Form(""), code_challenge: str = Form(...), nonce: str = Form("")):
+    if username not in USERS:
+        raise HTTPException(400, "unknown user")
+    code = secrets.token_urlsafe(18)
+    _codes[code] = {"user": username, "redirect_uri": redirect_uri, "scope": scope,
+                    "challenge": code_challenge, "exp": time.time() + 120}
+    sep = "&" if "?" in redirect_uri else "?"
+    return RedirectResponse(f"{redirect_uri}{sep}{urlencode({'code': code, 'state': state})}",
+                            status_code=302)
+
+
 @app.post("/oauth2/v1/token")
-def token(grant_type: str = Form(...), client_id: str = Form(...),
-          client_secret: str = Form(...), scope: str = Form("")):
-    if grant_type != "client_credentials":
-        raise HTTPException(400, "unsupported_grant_type")
+def token(grant_type: str = Form(...), client_id: str = Form(""), client_secret: str = Form(""),
+          scope: str = Form(""), code: str = Form(""), redirect_uri: str = Form(""),
+          code_verifier: str = Form(""), refresh_token: str = Form("")):
     if (client_id, client_secret) != (CLIENT_ID, CLIENT_SECRET):
         raise HTTPException(401, "invalid_client")
-    tok = secrets.token_urlsafe(24)
-    _tokens[tok] = time.time() + 3600
-    STATS["tokens_issued"] += 1
-    return {"access_token": tok, "token_type": "Bearer", "expires_in": 3600}
+    if grant_type == "client_credentials":
+        return _issue(None, False)
+    if grant_type == "authorization_code":
+        req = _codes.pop(code, None)  # single use
+        if not req or req["exp"] < time.time() or req["redirect_uri"] != redirect_uri:
+            raise HTTPException(400, "invalid_grant")
+        challenge = base64.urlsafe_b64encode(hashlib.sha256(code_verifier.encode()).digest()
+                                             ).rstrip(b"=").decode()
+        if challenge != req["challenge"]:
+            raise HTTPException(400, "invalid_grant: PKCE verification failed")
+        return _issue(req["user"], "offline_access" in req["scope"].split())
+    if grant_type == "refresh_token":
+        user = _refresh.pop(refresh_token, None)  # rotation: old refresh token is spent
+        if not user:
+            raise HTTPException(400, "invalid_grant")
+        return _issue(user, True)
+    raise HTTPException(400, "unsupported_grant_type")
 
 
 def _text(obj) -> dict:
@@ -159,7 +245,28 @@ def _members(set_expr: str, outline: dict) -> list[str]:
     return [m.strip(" []") for m in set_expr.strip("{} ").split(",") if m.strip(" []")]
 
 
-def _run_mdx(q: str, outline: dict | None = None) -> dict:
+def _allowed(member: str, allowed: list[str], parents: dict) -> bool:
+    while member:
+        if member in allowed:
+            return True
+        member = parents.get(member)
+    return False
+
+
+def _readable(tuple_members: list[str], outline: dict, filters: dict) -> bool:
+    for dim, allowed in (filters or {}).items():
+        if dim not in outline:
+            continue
+        members = outline[dim]["members"]
+        names = {n for n, _, _ in members}
+        parents = {n: p for n, p, _ in members}
+        cell = next((m for m in tuple_members if m in names), members[0][0])  # else top member
+        if not _allowed(cell, allowed, parents):
+            return False
+    return True
+
+
+def _run_mdx(q: str, outline: dict | None = None, filters: dict | None = None) -> dict:
     outline = outline or OUTLINE
     m = re.search(r"SELECT\s+(.+?)\s+ON COLUMNS(?:,\s*(?:NON EMPTY\s+)?(.+?)\s+ON ROWS)?\s+FROM",
                   q, re.IGNORECASE | re.DOTALL)
@@ -167,11 +274,25 @@ def _run_mdx(q: str, outline: dict | None = None) -> dict:
         raise ValueError("MDX syntax error (mock parser)")
     cols = _members(m.group(1), outline)
     rows = _members(m.group(2), outline) if m.group(2) else ["(slice)"]
-    return {"query": q, "columns": cols,
-            "rows": [{"member": r, "values": [_fake_value(r, c, q) for c in cols]} for r in rows]}
+    w = re.search(r"WHERE\s*\((.*)\)\s*$", q, re.IGNORECASE | re.DOTALL)
+    slicer = [x.strip(" []") for x in w.group(1).split("],") if x.strip(" []")] if w else []
+    no_access = 0
+
+    def cell(r, c):
+        nonlocal no_access
+        if not _readable([r, c, *slicer], outline, filters):
+            no_access += 1
+            return None  # Essbase shows #NoAccess
+        return _fake_value(r, c, q)
+
+    out = {"query": q, "columns": cols,
+           "rows": [{"member": r, "values": [cell(r, c) for c in cols]} for r in rows]}
+    if no_access:
+        out["no_access_cells"] = no_access
+    return out
 
 
-def _call(name: str, args: dict, profile: str) -> dict:
+def _call(name: str, args: dict, profile: str, user: dict | None = None) -> dict:
     tool = next((t for t in TOOLS if t["name"] == name), None)
     if not tool:
         raise ValueError(f"Unknown tool {name}")
@@ -199,7 +320,7 @@ def _call(name: str, args: dict, profile: str) -> dict:
                 for n, par, a in v["members"] if pat in n.lower() or (a and pat in a.lower())]
         return _text({"members": hits[:25], "total": len(hits)})
     if name == "execute_mdx_query":
-        return _text(_run_mdx(args["query"], _outline(args)))
+        return _text(_run_mdx(args["query"], _outline(args), (user or SERVICE_USER)["filters"]))
     return _text({"status": "submitted", "jobId": str(uuid.uuid4())})
 
 
@@ -207,8 +328,10 @@ def _call(name: str, args: dict, profile: str) -> dict:
 async def mcp(request: Request, profile: str = "viewer",
               authorization: str | None = Header(None)):
     tok = (authorization or "").removeprefix("Bearer ").strip()
-    if _tokens.get(tok, 0) < time.time():
+    info = _tokens.get(tok)
+    if not info or info["exp"] < time.time():
         return JSONResponse({"error": "invalid_token"}, status_code=401)
+    user = USERS.get(info["user"]) if info["user"] else SERVICE_USER
     msg = await request.json()
     sid = request.headers.get("Mcp-Session-Id")
     if msg.get("method") != "initialize" and sid and sid not in SESSIONS:
@@ -231,7 +354,7 @@ async def mcp(request: Request, profile: str = "viewer",
         elif method == "tools/call":
             if LATENCY_S:  # simulate a real server's response time (EMCP_MOCK_LATENCY_MS)
                 await asyncio.sleep(LATENCY_S)
-            result = _call(params["name"], params.get("arguments", {}), profile)
+            result = _call(params["name"], params.get("arguments", {}), profile, user)
         else:
             return JSONResponse({"jsonrpc": "2.0", "id": rid,
                                  "error": {"code": -32601, "message": "Method not found"}})

@@ -74,7 +74,7 @@ def validate(values: dict) -> list[str]:
     for name, allowed in CHOICES.items():
         if name in values and values[name] not in allowed:
             errors.append(f"{name} must be one of {', '.join(allowed)}")
-    for name in ("mcp_url", "token_url", "llm_base_url"):
+    for name in ("mcp_url", "token_url", "llm_base_url", "authorize_url", "redirect_url"):
         v = values.get(name)
         if v and not v.startswith(("https://", "http://")):
             errors.append(f"{name} must start with https:// (or http:// for local testing)")

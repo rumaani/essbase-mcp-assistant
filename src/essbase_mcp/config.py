@@ -35,6 +35,7 @@ CHOICES = {
     "profile": ("viewer", "analyst", "admin"),
     "auth_mode": ("client_credentials", "token", "none"),
     "identity_mode": ("shared", "per_user"),
+    "sso_provider": ("identity_domain", "entra"),
     "llm_provider": ("none", "openai_compatible"),
 }
 
@@ -58,6 +59,11 @@ class Settings:
     redirect_url: str = ""              # per_user; blank = <this app>/auth/callback
     user_scope: str = "urn:opc:idm:__myscopes__ openid offline_access"
     session_hours: int = 8              # idle sign-out
+    # how people sign in (per_user): the identity domain's own page, or Microsoft Entra ID
+    # federated with the identity domain (Entra is the domain's identity provider)
+    sso_provider: str = "identity_domain"
+    auto_signin: bool = False           # send people to sign-in automatically (SSO = no clicks)
+    signout_url: str = ""               # optional: also end the SSO session after app sign-out
     # query understanding
     llm_provider: str = "none"
     llm_base_url: str = ""
@@ -99,6 +105,9 @@ class Settings:
             redirect_url=e("OAUTH_REDIRECT_URL", ""),
             user_scope=e("OAUTH_USER_SCOPE", d.user_scope),
             session_hours=int(e("SESSION_HOURS", d.session_hours)),
+            sso_provider=e("SSO_PROVIDER", d.sso_provider),
+            auto_signin=e("AUTO_SIGNIN", "false").lower() == "true",
+            signout_url=e("SIGNOUT_URL", ""),
             llm_provider=e("LLM_PROVIDER", d.llm_provider),
             llm_base_url=e("LLM_BASE_URL", ""),
             llm_model=e("LLM_MODEL", ""),

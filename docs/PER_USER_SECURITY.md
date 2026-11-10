@@ -22,6 +22,8 @@ Oracle describes the built-in Essbase MCP server this way: the identity domain i
 token, Essbase validates it, and tool calls run as the signed-in user with existing roles and
 filters unchanged ([Oracle blog](https://blogs.oracle.com/autonomous-ai-database/the-built-in-essbase-mcp-server-secure-ai-access-with-oci-iam-oauth)).
 
+> Using Microsoft Entra ID for sign-in? Do this page first, then [ENTRA_SSO.md](ENTRA_SSO.md).
+
 ## Try it with the built-in sample
 1. `emcp web` → **Admin** → *Who Essbase sees* → **Each person signs in** → **Save**.
 2. Click **Sign in**. The mock identity domain offers three demo users:

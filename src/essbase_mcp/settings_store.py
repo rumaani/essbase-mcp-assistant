@@ -74,9 +74,10 @@ def validate(values: dict) -> list[str]:
     for name, allowed in CHOICES.items():
         if name in values and values[name] not in allowed:
             errors.append(f"{name} must be one of {', '.join(allowed)}")
-    for name in ("mcp_url", "token_url", "llm_base_url", "authorize_url", "redirect_url"):
+    for name in ("mcp_url", "token_url", "llm_base_url", "authorize_url", "redirect_url",
+                 "signout_url"):
         v = values.get(name)
-        if v and not v.startswith(("https://", "http://")):
+        if v and not v.startswith(("https://", "http://", "/")):
             errors.append(f"{name} must start with https:// (or http:// for local testing)")
     for name, (lo, hi) in INT_LIMITS.items():
         if values.get(name) not in (None, ""):
@@ -102,13 +103,13 @@ def merge(current: Settings, updates: dict) -> Settings:
             elif updates.get(name):
                 values[name] = updates[name]
         elif name in updates and updates[name] not in (None, ""):
-            if name == "verify_tls":
+            if name in ("verify_tls", "auto_signin"):
                 values[name] = bool(updates[name])
             elif name in INT_LIMITS:
                 values[name] = int(updates[name])
             else:
                 values[name] = str(updates[name]).strip()
-        elif name == "verify_tls" and name in updates:
+        elif name in ("verify_tls", "auto_signin") and name in updates:
             values[name] = bool(updates[name])
     return dataclasses.replace(current, **values)
 

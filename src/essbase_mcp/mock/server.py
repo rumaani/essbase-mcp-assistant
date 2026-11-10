@@ -21,7 +21,7 @@ import time
 import uuid
 from urllib.parse import urlencode
 
-from fastapi import FastAPI, Form, Header, HTTPException, Request
+from fastapi import FastAPI, Form, Header, HTTPException, Query, Request
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, Response
 
 CLIENT_ID, CLIENT_SECRET = "essbase-assistant", "change-me"
@@ -132,12 +132,23 @@ app = FastAPI(title="Mock Essbase MCP")
 # A cell is readable only if, for each filtered dimension, the cell's member is the allowed
 # member or one of its descendants - like an Essbase filter on @IDESCENDANTS("East").
 USERS = {
-    "alice": {"name": "Alice Analyst", "note": "East only",
+    "alice": {"name": "Alice Analyst", "note": "East only", "upn": "alice@contoso.com",
               "filters": {"Market": ["East"], "Geography": ["East"]}},
-    "bob": {"name": "Bob Buyer", "note": "West only",
+    "bob": {"name": "Bob Buyer", "note": "West only", "upn": "bob@contoso.com",
             "filters": {"Market": ["West"], "Geography": ["West"]}},
-    "carol": {"name": "Carol Controller", "note": "all data", "filters": {}},
+    "carol": {"name": "Carol Controller", "note": "all data", "upn": "carol@contoso.com",
+              "filters": {}},
 }
+
+# --- mock Microsoft Entra ID, federated with the mock identity domain -------------------
+# Simulates: identity domain IdP policy -> Entra ID (SAML) -> back to the identity domain,
+# which maps the Entra user (UPN / email) to its own user and issues the code as usual.
+# IDP_POLICY is what an admin sets in the identity domain; the app sets it in mock mode.
+IDP_POLICY = "local"  # local = identity domain sign-in page | entra = send users to Entra ID
+ENTRA_ACCOUNTS = {d["upn"]: u for u, d in USERS.items()}
+ENTRA_ACCOUNTS["dave@contoso.com"] = None  # exists in Entra, never provisioned to the domain
+ENTRA_COOKIE = "mock_entra_session"
+_fed_requests: dict[str, dict] = {}  # pending sign-ins waiting for Entra
 SERVICE_USER = {"name": "Service account", "note": "client credentials", "filters": {}}
 ACCESS_TTL = 3600  # seconds; tests shorten it to exercise refresh
 
@@ -173,6 +184,11 @@ def authorize(client_id: str, redirect_uri: str, response_type: str = "code", st
         raise HTTPException(400, "invalid_request")
     if code_challenge_method != "S256" or not code_challenge:
         raise HTTPException(400, "PKCE (S256) is required")
+    if IDP_POLICY == "entra":  # IdP policy routes this app's sign-ins straight to Entra ID
+        rid = secrets.token_urlsafe(12)
+        _fed_requests[rid] = {"redirect_uri": redirect_uri, "state": state, "scope": scope,
+                              "challenge": code_challenge, "exp": time.time() + 600}
+        return RedirectResponse(f"../../entra/saml?{urlencode({'request': rid})}", status_code=302)
     hidden = "".join(f'<input type="hidden" name="{k}" value="{html.escape(v)}">' for k, v in {
         "redirect_uri": redirect_uri, "state": state, "scope": scope,
         "code_challenge": code_challenge, "nonce": nonce}.items())
@@ -190,17 +206,82 @@ button span{{display:block;color:#667;font-size:12.5px}}</style>
 <p>Pick a demo user. Each has a different Essbase security filter.</p>{hidden}{buttons}</form>"""
 
 
+def _new_code(user: str, redirect_uri: str, state: str, scope: str, challenge: str):
+    code = secrets.token_urlsafe(18)
+    _codes[code] = {"user": user, "redirect_uri": redirect_uri, "scope": scope,
+                    "challenge": challenge, "exp": time.time() + 120}
+    sep = "&" if "?" in redirect_uri else "?"
+    return RedirectResponse(f"{redirect_uri}{sep}{urlencode({'code': code, 'state': state})}",
+                            status_code=302)
+
+
+@app.get("/entra/saml", response_class=HTMLResponse)
+def entra_saml(request: Request, req: str = Query("", alias="request")):
+    """Entra ID receiving the identity domain's SAML request. Already signed in to Microsoft
+    (session cookie)? Answer immediately - no page, no typing. Otherwise: account picker."""
+    if req not in _fed_requests:
+        raise HTTPException(400, "unknown or expired SAML request")
+    upn = request.cookies.get(ENTRA_COOKIE)
+    if upn in ENTRA_ACCOUNTS:
+        return RedirectResponse(f"../oauth2/v1/federated?{urlencode({'request': req, 'upn': upn})}",
+                                status_code=302)
+    accounts = "".join(
+        f'<button name="upn" value="{a}"><b>{html.escape(a)}</b><span>'
+        f'{html.escape(USERS[u]["name"] + " · " + USERS[u]["note"]) if u else "not provisioned in the identity domain"}'
+        f"</span></button>" for a, u in ENTRA_ACCOUNTS.items())
+    return f"""<!doctype html><title>Sign in to your account · Mock Microsoft Entra ID</title>
+<style>body{{font:15px "Segoe UI",system-ui;background:#f3f2f1;display:grid;place-items:center;height:100vh;margin:0}}
+form{{background:#fff;padding:36px 40px;width:400px;box-shadow:0 2px 6px #0003}}
+.brand{{font-weight:600;color:#5e5e5e;margin-bottom:16px}}h1{{font-size:22px;font-weight:600;margin:0 0 6px}}
+p{{color:#555;font-size:13px;margin:0 0 16px}}button{{display:block;width:100%;text-align:left;padding:10px 12px;
+margin:4px 0;border:0;background:#fff;cursor:pointer;font:inherit}}button:hover{{background:#f2f2f2}}
+button span{{display:block;color:#666;font-size:12.5px}}</style>
+<form method="post" action="signin"><div class="brand">Mock Microsoft Entra ID</div><h1>Pick an account</h1>
+<p>Your organization signs in with Microsoft. In a real company this step is usually skipped,
+because Windows or your browser is already signed in.</p>
+<input type="hidden" name="request" value="{html.escape(req)}">{accounts}</form>"""
+
+
+@app.post("/entra/signin")
+def entra_signin(upn: str = Form(...), req: str = Form(..., alias="request")):
+    if upn not in ENTRA_ACCOUNTS or req not in _fed_requests:
+        raise HTTPException(400, "invalid sign-in")
+    out = RedirectResponse(f"../oauth2/v1/federated?{urlencode({'request': req, 'upn': upn})}",
+                           status_code=302)
+    out.set_cookie(ENTRA_COOKIE, upn, path="/", httponly=True, samesite="lax")
+    return out
+
+
+@app.get("/entra/signout")
+def entra_signout(return_to: str = Query("/", alias="return")):
+    out = RedirectResponse(return_to if return_to.startswith("/") else "/", status_code=302)
+    out.delete_cookie(ENTRA_COOKIE, path="/")
+    return out
+
+
+@app.get("/oauth2/v1/federated", response_class=HTMLResponse)
+def federated(req: str = Query(..., alias="request"), upn: str = ""):
+    """The identity domain consuming Entra's (here: unsigned, mock-only) assertion: map the
+    Entra user to a domain user by UPN/email, then issue the authorization code as usual."""
+    pending = _fed_requests.pop(req, None)
+    if not pending or pending["exp"] < time.time():
+        raise HTTPException(400, "expired sign-in")
+    user = ENTRA_ACCOUNTS.get(upn)
+    if not user:
+        return HTMLResponse(f"<h2>Can't sign you in</h2><p>{html.escape(upn)} signed in with "
+                            "Microsoft, but has no user in the identity domain. Ask an administrator "
+                            "to provision the account (SCIM or just-in-time provisioning).</p>",
+                            status_code=403)
+    return _new_code(user, pending["redirect_uri"], pending["state"], pending["scope"],
+                     pending["challenge"])
+
+
 @app.post("/oauth2/v1/approve")
 def approve(username: str = Form(...), redirect_uri: str = Form(...), state: str = Form(""),
             scope: str = Form(""), code_challenge: str = Form(...), nonce: str = Form("")):
     if username not in USERS:
         raise HTTPException(400, "unknown user")
-    code = secrets.token_urlsafe(18)
-    _codes[code] = {"user": username, "redirect_uri": redirect_uri, "scope": scope,
-                    "challenge": code_challenge, "exp": time.time() + 120}
-    sep = "&" if "?" in redirect_uri else "?"
-    return RedirectResponse(f"{redirect_uri}{sep}{urlencode({'code': code, 'state': state})}",
-                            status_code=302)
+    return _new_code(username, redirect_uri, state, scope, code_challenge)
 
 
 @app.post("/oauth2/v1/token")

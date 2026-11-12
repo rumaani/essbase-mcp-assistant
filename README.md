@@ -111,7 +111,7 @@ src/essbase_mcp/
   web/        FastAPI backend-for-frontend + single-page UI (no Node build)
 contexts/     context files (one per cube)
 data/         saved settings + encryption key (git-ignored)
-docs/         ARCHITECTURE, CONTEXT_FILE, CONCURRENCY, PER_USER_SECURITY, ENTRA_SSO, ADMIN, ROADMAP
+docs/         ARCHITECTURE, AGENT_STANDARDS, CONTEXT_FILE, CONCURRENCY, PER_USER_SECURITY, ENTRA_SSO, ADMIN, ROADMAP
 scripts/      loadtest.py
 ```
 
